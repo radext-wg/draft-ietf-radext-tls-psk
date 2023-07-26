@@ -1,7 +1,7 @@
 ---
 title: RADIUS and TLS-PSK
 abbrev: RADIUS and TLS-PSK
-docname: draft-dekok-radext-tls-psk-01
+docname: draft-ietf-radext-tls-psk-00
 
 stand_alone: true
 ipr: trust200902
