@@ -52,7 +52,7 @@ This document gives implementation and operational considerations for using TLS-
 
 # Introduction
 
-The previous specifications "Transport Layer Security (TLS) Encryption for RADIUS"  [RFC6614] and " Datagram Transport Layer Security (DTLS) as a Transport Layer for RADIUS" [RFC7360] defined how (D)TLS can be used as a transport protocol for RADIUS.  However, those documents do not provide guidance for using TLS-PSK with RADIUS.  This docoument provides that missing guidance, and gives implementation and operational considerations.
+The previous specifications "Transport Layer Security (TLS) Encryption for RADIUS"  {{RFC6614}} and " Datagram Transport Layer Security (DTLS) as a Transport Layer for RADIUS" {{RFC7360}} defined how (D)TLS can be used as a transport protocol for RADIUS.  However, those documents do not provide guidance for using TLS-PSK with RADIUS.  This docoument provides that missing guidance, and gives implementation and operational considerations.
 
 # Terminology
 
@@ -92,7 +92,7 @@ Administrators SHOULD use PSKs of at least 24 octets, generated using a source o
 
 Passwords are generally intended to be remembered and entered by people on a regular basis.  In contrast, PSKs are intended to be entered once, and then automatically saved in a system configuration.  As such, due to the limited entropy of passwords, they are not acceptable for use with TLS-PSK, and would only be acceptable for use with a password-authenticated key exchange (PAKE) TLS method.
 
-We also incorporate by reference the requirements of Section 10.2 of [RFC7360] when using PSKs.
+We also incorporate by reference the requirements of Section 10.2 of {{RFC7360}} when using PSKs.
 
 ### Interaction between PSKs and Shared Secrets
 
@@ -103,13 +103,14 @@ It is RECOMMENDED that RADIUS clients and server track all used shared secrets a
 * no shared secret is used for more than one RADIUS client
 * no PSK is used for more than one RADIUS client
 * no shared secret is used as a PSK
-* no PSK is used as a shared secret
+
+Note that the shared secret of "radsec" given in {{RFC6614}} can be used across multiple clients, as that value is mandated by the specification.  The intention here is to recommend best practices for administators who enter site-local shared secrets.
 
 There may be use-cases for using one shared secret across multiple RADIUS clients.  There may similarly be use-cases for sharing a PSK across multiple RADIUS clients.   Details of the possible attacks on reused PSKs are given in {{RFC9257}} Section 4.1.
 
 There are few, if any, use-cases for using a PSK as a shared secret, or vice-versa.
 
-Implementaions MUST NOT provide user interfaces which allow both PSKs and shared secrets to be entered at the same time.  Only one or the other must be present.  Implementations MUST NOT use a "shared secret" field as a way for administrators to enter PSKs.  The PSK entry fields MUST be labelled as being related to PSKs, and not to shared secrets.
+Implementaions SHOULD NOT provide user interfaces which allow both PSKs and shared secrets to be entered at the same time.  There is too much of a tempation for administrators to enter the same value in both fields, which would violate the limitations given above.  Implementations MUST NOT use a "shared secret" field as a way for administrators to enter PSKs.  The PSK entry fields MUST be labelled as being related to PSKs, and not to shared secrets.
 
 ## PSK Identities
 
@@ -133,47 +134,60 @@ Implementations MUST use ECDH cipher suites.  Implementations MUST implement the
 
 ## PSK Identities
 
-[RFC6614] is silent on the subject of PSK identities, which is an issue that we correct here.  Guidance is required on the use of PSK identities, as the need to manage identities associated with PSK is a new requirement for NAS management interfaces, and is a new requirement for RADIUS servers.
+{{RFC6614}} is silent on the subject of PSK identities, which is an issue that we correct here.  Guidance is required on the use of PSK identities, as the need to manage identities associated with PSK is a new requirement for NAS management interfaces, and is a new requirement for RADIUS servers.
 
-RADIUS systems implementing TLS-PSK MUST support identities as per [RFC4279] Section 5.3, and MUST enable configuring TLS-PSK identities in management interfaces as per [RFC4279] Section 5.4.
+RADIUS systems implementing TLS-PSK MUST support identities as per {{RFC4279}} Section 5.3, and MUST enable configuring TLS-PSK identities in management interfaces as per {{RFC4279}} Section 5.4.
 
 RADIUS shared secrets cannot safely be used as TLS-PSKs. To prevent confusion between shared secrets and TLS-PSKs, management interfaces and APIs need to label PSK fields as "PSK" or "TLS-PSK", rather than "shared secret
 
-Where dynamic server lookups [RFC7585] are not used, RADIUS clients MUST still permit the configuration of a RADIUS server IP address.
+RADIUS/TLS clients MUST still permit the configuration of a RADIUS server IP address.  Where {{RFC7585}} dynamic server lookups are used, that specification only makes provisions for servers to use certificates.  Since there is no way to determine which PSK to use for a connection to a particular server, then TLS-PSK cannot be used with {{RFC7585}} dynamic lookups.
 
 # Guidance for RADIUS Servers
 
-The following section(s) describe guidance for RADIUS server implementations and deployments.
+The following section(s) describe guidance for RADIUS server implementations and deployments.  We first give an overview of current practices, and then extend and/or replace those practices for TLS-PSK.
 
-## Identifying and filtering clients
+## Current Practices
 
-RADIUS/UDP and RADIUS/TCP identify clients by source IP address.  This practice is no longer needed when TLS transport is used, as the client can instead be identified via TLS information such as PSK identity, client certificate, etc.
+RADIUS/UDP and RADIUS/TCP identify clients by source IP address ({{RFC2865}} or by client certificate ({{RFC7585}}).  Neither of these approaches work for TLS-PSK.  Thi
+s section describes current practices and mandates behavior for servers which use TLS-PSK.
 
-When a RADIUS server implements TLS-PSK, it MUST use the PSK identity as the logical identifier for a RADIUS client instead of the IP address as was done with RADIUS/UDP.  That is, instead of associating a source IP address with a shared secret, the RADIUS server instead associates a PSK identity with a pre-shared key.  In effect, the PSK identity replaces the source IP address of the connection as the client identifier.
+For a RADIUS/UDP server, it is typically configured with a set of information per client, which includes at least the source IP address and shared secret.  When the yserver receives a RADIUS/UDP packet, it looks up the source IP address, finds a client definition, and therefore the shared secret.  The packet is then authenticated (or not) using that shared secret.
 
-For example, when a RADIUS server receives a RADIUS/UDP packet, it normally looks up the source IP address, finds a client definition, and that client definition contains a shared secret.  The packet is then authenticated (or not) using that shared secret.
+That is, the IP address is treated as the clients identity, and the shared secret is used to prove the clients authenticity and shared trust.  The set of clients forms a logical database "client table", with the IP address as the key.
 
-When TLS-PSK is used, the RADIUS server instead receives a TLS connection request which contains a PSK identity.  That identity is then used to find a client definition, and that client definition contains a PSK.  The TLS connection is then authenticated (or not) using that PSK.
+A server may be configured with additional site-local policies associated with that client.  For example, a client may be marked up as being a WiFi Access Point, or a VPN concentrator, etc.  Different clients may be permitted to send different kinds of requests, where some may send Accounting-Request packets, and other clients may not send accounting packets.
 
-Each RADIUS client MUST be configured with a unique PSK, which implies a unique PSK identifier for each RADIUS client. To enforce the use of unique PSKs, RADIUS servers accepting TLS-PSK MUST require that a PSK identifier and PSK can be associated with each RADIUS client.
+## Practices for TLS-PSK
 
-RADIUS servers MUST be able to look up PSK identity in a subsystem which then returns the actual PSK.
+We define practices for TLS-PSK by analogy with the RADIUS/UDP use-case, and by extending the additional policies associated with the client.  The PSK identity replaces the source IP address as the client identifier.  The PSK replaces the shared secret as proof of client authenticity and shared trust.
 
-RADIUS servers MUST support IP address and network filtering of the source IP address for all TLS connections.  In many situations a RADIUS server does not need to allow connections from the entire Internet.  As such, it can increase security to limit permitted connections to a small list of networks.
+In order to securely support dynamic source IP addresses for clients, we also require that servers limit clients based on a network range.  The alternative would be to suggest that RADIUS servers allow any source IP address to connect and try TLS-PSK, which could be a security risk.
 
-For example, a RADIUS server be configured to be accept connections from a source network of 192.0.2/24.  The RADIUS server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
+In most situations a RADIUS server does not need to allow connections from the entire Internet.  Where such connections are required, as with {{RFC7585}} or with a roaming consortium, TLS-PSK MUST NOT be used.  It is signicantly easier for an attacker to crack a PSK than to forge a client certificate.
 
-RADIUS servers SHOULD be able to limit certain PSK identifiers to certain network ranges or IP addresses.  This filtering can catch configuration errors.  That is, if a NAS is known to have a dynamic IP address within a particular subnet, the server should limit use of the NASes PSK to that subnet.
+For example, a RADIUS server could be configured to be accept connections from a source network of 192.0.2/24.  The server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
 
-For example, as with the example above, the RADIUS server be configured to be accept connections from a source network of 192.0.2/24.  The RADIUS server may be configured with a PSK identity "system1", and then also configured to associate that PSK identity with the source IP address 192.0.2.16.  In that case, if the server receives a connection request from the source IP address 192.0.2.16 with PSK identity other than "system1", then the connection could be rejected.  Similarly, if the server receives a connection request from the source IP address other than 192.0.2.16 but which uses the PSK identity "system1", then the connection could also be rejected.
+RADIUS servers need to be able to limit certain PSK identifiers to certain network ranges or IP addresses.  That is, if a NAS is known to have a dynamic IP address within a particular subnet, the server should limit use of the NASes PSK to that subnet.  This filtering can therefore help to catch configuration errors.
 
-The use of PSK identities as client identifiers does not prevent RADIUS servers from performing source IP filtering of incoming packets or connections.  Instead, the use of PSK identities as client identifiers means that source IP addresses are no longer required to be associated with RADIUS clients.
+As some clients may have dynamic IP addresses, it is possible for a one PSK identity to appear at different source IP addresses over time.  In addition, as there may be many clients behind one NAT gateway, there may be multiple RADIUS clients using one public IP address.  RADIUS servers need to support multiple PSK identifiers at one source IP address.
 
-Note that as some clients may have dynamic IP addresses, it is possible for a one PSK identity to appear at different source IP addresses over time.  In addition, as there may be many clients behind one NAT gateway, there may be multiple RADIUS clients using one public IP address.  RADIUS servers MUST support multiple PSKs at one source IP address, and MUST support a unique PSK identity for each unique client which is deployed in such a scenario.
+That is,  a server needs to support multiple different clients within one network range, multiple clients behind a NAT, and one client having different IP addresses over time.  All of those use-cases are common and necessary.
 
-In those use-cases, the RADIUS server should either not use source IP address filtering, or should apply source IP filtering rules which permit those use-cases.  This filtering must therefore be flexible to allow all of the above behaviors, and be configurable by administrators to match their needs.
+The following section describes these requirements in more detail.
 
-RADIUS servers SHOULD tie PSK identities to a particular permitted IP address or permitted network, as doing so will lower the risk if a PSK is leaked.  RADIUS servers MUST permit multiple clients to share one permitted IP address or network.
+### Requirements for TLS-PSK
+
+A server supporting this specification MUST be configurable with a set of "allowed" network ranges from which clients are permitted to connect.  Any connection from outside of the allowed range MUST be rejected before any PSK identity is checked.
+
+Once a connection has been made from a permitted destination, the server MUST use the PSK identity as the logical identifier for a RADIUS client instead of the IP address as was done with RADIUS/UDP.  The PSK identity is then looked up in the local "client table" described above.
+
+Servers implementing this specification SHOULD also be able to associate an IP range for each client.  Any connection from outside this range MUST be rejected, even if the PSK identity is known, and before the PSK is verified.
+
+Note that this lookup is independent from the "allowed" network ranges which are checked when the TLS connection is made.  The two range limitations can overlap completely, or only partially.  The allowed network ranges for any two clients may also overlap partially, completely, or not at all.  All of these possibilities MUST be supprted by the server implementation.
+
+Once the source IP has been verified to be allowed for this particular client, the server verifies the TLS connection via the PSK taken from the client definition.  If the PSK is verified, the server then accepts the connection, and proceeds with RADIUS/TLS as per {{RFC6614}}.
+
+Finally, if a RADIUS server does not recognize the PSK identity or if the identity is not permitted to use PSK, then the server MAY proceed with a certificate-based handshake.  Since TLS 1.3 {{RFC8446}} uses PSK for resumption, another use-case is that the PSK identity used for resumption may be rejected, in which case a full handshake is performed.
 
 # Privacy Considerations
 
