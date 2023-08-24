@@ -1,7 +1,7 @@
 ---
 title: RADIUS and TLS-PSK
 abbrev: RADIUS and TLS-PSK
-docname: draft-ietf-radext-tls-psk-02
+docname: draft-ietf-radext-tls-psk-03
 
 stand_alone: true
 ipr: trust200902
@@ -117,7 +117,7 @@ There may be use-cases for using one shared secret across multiple RADIUS client
 
 There are few, if any, use-cases for using a PSK as a shared secret, or vice-versa.
 
-Implementations SHOULD NOT provide user interfaces which allow both PSKs and shared secrets to be entered at the same time.  There is too much of a temptation for administrators to enter the same value in both fields, which would violate the limitations given above.  Implementations MUST NOT use a "shared secret" field as a way for administrators to enter PSKs.  The PSK entry fields MUST be labelled as being related to PSKs, and not to shared secrets.
+Implementations SHOULD NOT provide user interfaces which allow both PSKs and shared secrets to be entered at the same time.  There is too much of a temptation for administrators to enter the same value in both fields, which would violate the limitations given above.  Implementations MUST NOT use a "shared secret" field as a way for administrators to enter PSKs.  The PSK entry fields MUST be labeled as being related to PSKs, and not to shared secrets.
 
 ## PSK Identities
 
@@ -127,9 +127,9 @@ Implementations MUST support PSK Identities of 128 octets, and SHOULD support lo
 
 ### Security of PSK Identities
 
-We note that the PSK identity is a field created but the connecting client.  Since the client is untrusted until both the identity and PSK have been verified, both of those fields MUST be treated as untrusted.  That is, a well-formed PSK Identity is likely to be in UTF-8 format, due to the requirements of {{RFC4279}} Section 5.1.  However, implementations MUST support managing PSK identities as a set of undistinguished octets.
+We note that the PSK identity is a field created by the connecting client.  Since the client is untrusted until both the identity and PSK have been verified, both of those fields MUST be treated as untrusted.  That is, a well-formed PSK Identity is likely to be in UTF-8 format, due to the requirements of {{RFC4279}} Section 5.1.  However, implementations MUST support managing PSK identities as a set of undistinguished octets.
 
-It is not safe to use a bare PSK Identity to look up a corresponding PSK.  The identity may have incorret UTF-8 format;it may contain data which forms an injection attack for SQL, LDAP, REST or shell metacharacters; or it may contain embedded NUL otets which are incompatible with APIs which expect NUL terminated strings.  The identity may also be up to 65535 octets long.
+It is not safe to use a raw PSK Identity to look up a corresponding PSK.  The PSK may come from an untrusted source, and may contain invalid or malicious data.  For example, the identity may have incorrect UTF-8 format; or it may contain data which forms an injection attack for SQL, LDAP, REST or shell metacharacters; or it may contain embedded NUL octets which are incompatible with APIs which expect NUL terminated strings.  The identity may also be up to 65535 octets long.
 
 As such, implementations MUST validate the identity prior to it being used as a lookup key.  When the identity is passed to an external API (e.g. database lookup), implementations MUST either escape any characters in the identity which are invalid for that API, or else reject the identity entirely.  The exact form of any escaping depends on the API, and we cannot document all possible methods here.  However, a few basic validation rules are suggested, as outlined below.  Any identity which is rejected by these validation rules SHOULD cause the server to close the TLS connection.
 
@@ -141,7 +141,7 @@ The suggested validation rules are as follows:
 
 * Where the NAI format is expected, identities which are not in NAI format SHOULD be rejected
 
-It is RECOMMENDED that implementations extend these rules with any additional validation which are found to be useful.  For example, implementations and/or deployments could both generate PSK identities in a particular format for passing to client systems, and then also verify that any received identity matches that format.
+It is RECOMMENDED that implementations extend these rules with any additional validation which are found to be useful.  For example, implementations and/or deployments could both generate PSK identities in a particular format for passing to client systems, and then also verify that any received identity matches that format.  For example, a site could generate PSK identities which are composed of characters in the local language.  The site could then reject identities which contain characters from other languages, even if those characters are valid UTF-8.
 
 ## PSK and PSK Identity Sharing
 
@@ -171,7 +171,11 @@ RADIUS/TLS clients MUST still permit the configuration of a RADIUS server IP add
 
 The following section(s) describe guidance for RADIUS server implementations and deployments.  We first give an overview of current practices, and then extend and/or replace those practices for TLS-PSK.
 
-Implementations MUST use ECDH cipher suites.  Implementations MUST implement the recommended cipher suites in {{RFC9325}} Section 4.2 for TLS 1.2, and in {{RFC9325}} Section 4.2 for TLS 1.3.
+Implementations MUST support the recommended cipher suites in {{RFC9325}} Section 4.2 for TLS 1.2, and in {{RFC9325}} Section 4.2 for TLS 1.3.  In order to future-proof these recommendations, we give the following recommendations:
+
+* Implementations SHOULD use the "Recommended" cipher suites listed in the IANA "TLS Cipher Suites" registry,
+  * for TLS 1.3, use the use "psk_dhe_ke" PSK key exchange mode,
+  * for TLS 1.2 and earlier, use ciphersuites which require ephemeral keying.
 
 ## Current Practices
 
@@ -191,13 +195,13 @@ In order to securely support dynamic source IP addresses for clients, we also re
 
 In most situations a RADIUS server does not need to allow connections from the entire Internet.  Where such connections are required, as with {{RFC7585}} or with a roaming consortium, TLS-PSK MUST NOT be used.  It is significantly easier for an attacker to crack a PSK than to forge a client certificate.
 
-For example, a RADIUS server could be configured to be accept connections from a source network of 192.0.2/24.  The server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
+For example, a RADIUS server could be configured to be accept connections from a source network of 192.0.2.0/24.  The server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
 
 RADIUS servers need to be able to limit certain PSK identifiers to certain network ranges or IP addresses.  That is, if a NAS is known to have a dynamic IP address within a particular subnet, the server should limit use of the NASes PSK to that subnet.  This filtering can therefore help to catch configuration errors.
 
 As some clients may have dynamic IP addresses, it is possible for a one PSK identity to appear at different source IP addresses over time.  In addition, as there may be many clients behind one NAT gateway, there may be multiple RADIUS clients using one public IP address.  RADIUS servers need to support multiple PSK identifiers at one source IP address.
 
-That is,  a server needs to support multiple different clients within one network range, multiple clients behind a NAT, and one client having different IP addresses over time.  All of those use-cases are common and necessary.
+That is, a server needs to support multiple different clients within one network range, multiple clients behind a NAT, and one client having different IP addresses over time.  All of those use-cases are common and necessary.
 
 The following section describes these requirements in more detail.
 
