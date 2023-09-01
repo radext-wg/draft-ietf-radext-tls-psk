@@ -235,7 +235,7 @@ There are no IANA considerations in this document.
 
 RFC Editor: This section may be removed before final publication.
 
-# Acknowledgements
+# Acknowledgments
 
 Thanks to the many reviewers in the RADEXT working group for positive feedback.
 
