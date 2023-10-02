@@ -35,3 +35,7 @@ tag:
 	@git tag ${DRAFT}-${VERSION}
 
 .PRECIOUS: ${DRAFT}.xml
+
+.PHONY: spell
+spell: $(DRAFT).md
+	aspell -d en_US -c $<
