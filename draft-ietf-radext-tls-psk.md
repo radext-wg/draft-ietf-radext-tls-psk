@@ -165,6 +165,8 @@ Client implementations MUST allow the use of a pre-shared key (TLS-PSK) for RADI
 
 For TLS 1.3, Implementations MUST support "psk_dhe_ke" Pre-Shared Key Exchange Mode in TLS 1.3 as discussed in {{RFC8446}} Section 4.2.9 and in {{RFC9257}} Section 6.  Implementations MUST implement the recommended cipher suites in {{RFC9325}} Section 4.2 for TLS 1.2, and in {{RFC9325}} Section 4.2 for TLS 1.3.
 
+If a client initiated a connection using a PSK with TLS 1.3 by including the pre-shared key extension, it MUST close the connection if the server did not also select the pre-shared key to continue the handshake.
+
 ## PSK Identities
 
 {{RFC6614}} is silent on the subject of PSK identities, which is an issue that we correct here.  Guidance is required on the use of PSK identities, as the need to manage identities associated with PSK is a new requirement for NAS management interfaces, and is a new requirement for RADIUS servers.
