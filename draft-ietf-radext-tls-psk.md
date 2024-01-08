@@ -211,7 +211,7 @@ In order to securely support dynamic source IP addresses for clients, we also re
 
 Even where {{RFC7585}} dynamic discovery is not used, servers SHOULD NOT permit TLS-PSK to be used across the wider Internet.  The intent for TLS-PSK is for it to be used in internal / secured networks, where clients come from a small number of known locations.  In contrast, certificates can be generated and assigned to clients without any interaction with the RADIUS server.  Therefore if the RADIUS server needs to accept connections from clients at unknown locations, a more secure method is to use client certificates.
 
-If a client system is compromised, its complete configuration is exposed to the attacker.  Exposing a client certificate means that the attacker can pretend to be the client.  In contrast, exposing a PSK means that the attacker can not only pretend to be the client, but can also pretend to be the server.XXX
+If a client system is compromised, its complete configuration is exposed to the attacker.  Exposing a client certificate means that the attacker can pretend to be the client.  In contrast, exposing a PSK means that the attacker can not only pretend to be the client, but can also pretend to be the server.
 
 The benefits of TLS-PSK are in easing management and in administative overhead, not in securing traffic from resourceful attackers.  Where TLS-PSK is used across the Internet, PSKs MUST contain at least 256 bits of entropy.
 
