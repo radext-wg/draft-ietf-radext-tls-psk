@@ -141,11 +141,11 @@ It is not safe to use a raw PSK Identity to look up a corresponding PSK.  The PS
 
 As such, implementations MUST validate the identity prior to it being used as a lookup key.  When the identity is passed to an external API (e.g. database lookup), implementations MUST either escape any characters in the identity which are invalid for that API, or else reject the identity entirely.  The exact form of any escaping depends on the API, and we cannot document all possible methods here.  However, a few basic validation rules are suggested, as outlined below.  Any identity which is rejected by these validation rules SHOULD cause the server to close the TLS connection.
 
-The suggested validation rules are as follows:
+The suggested validation rules for identies used outside of resumption are as follows:
 
 * Identities longer than a fixed maximum SHOULD be rejected.  The limit is implementation dependent, but SHOULD NOT be less than 128, and SHOULD NOT be more than 1024.
 
-* Identities which are not in UTF-8 format SHOULD be rejected.  This includes any identity with embedded control characters, NUL octets, etc.
+* Identities SHOULD be in UTF-8 format.  Identities with embedded control characters, NUL octets, etc. SHOULD NOT be used.
 
 * Where the NAI format is expected, identities which are not in NAI format SHOULD be rejected
 
@@ -163,7 +163,7 @@ Implementations SHOULD warn administrators if the same PSK identity and/or PSK i
 
 Client implementations MUST allow the use of a pre-shared key (TLS-PSK) for RADIUS/TLS.  The client implementation can then expose a user interface flag which is "TLS yes / no", and then also fields which ask for the PSK identity and PSK itself.
 
-For TLS 1.3, Implementations MUST support "psk_dhe_ke" Pre-Shared Key Exchange Mode in TLS 1.3 as discussed in {{RFC8446}} Section 4.2.9 and in {{RFC9257}} Section 6.  Implementations MUST implement the recommended cipher suites in {{RFC9325}} Section 4.2 for TLS 1.2, and in {{RFC9325}} Section 4.2 for TLS 1.3.
+For TLS 1.3, Implementations MUST support "psk_dhe_ke" Pre-Shared Key Exchange Mode in TLS 1.3 as discussed in {{RFC8446}} Section 4.2.9 and in {{RFC9257}} Section 6.  Implementations MUST implement the recommended cipher suites in {{RFC9325}} Section 4.2 for TLS 1.2, and in {{RFC8446}} Section 9.1 for TLS 1.3.
 
 If a client initiated a connection using a PSK with TLS 1.3 by including the pre-shared key extension, it MUST close the connection if the server did not also select the pre-shared key to continue the handshake.
 
@@ -173,7 +173,7 @@ If a client initiated a connection using a PSK with TLS 1.3 by including the pre
 
 RADIUS systems implementing TLS-PSK MUST support identities as per {{RFC4279}} Section 5.3, and MUST enable configuring TLS-PSK identities in management interfaces as per {{RFC4279}} Section 5.4.
 
-The historic methods of signing RADIUS packets have not yet been cracked, but they are believed to be much less secure than modern TLS.  Theregore, when a RADIUS shared secret is used to sign RADIUS/UDP or RADIUS/TCP packets, that shared secret MUST NOT be used with TLS-PSK.  If the secrets were to be reused, then an attack on historic RADIUS cryptography could be trivially leveraged to decrypt TLS-PSK sessions.  Therefore in order to prevent confusion between shared secrets and TLS-PSKs, management interfaces and APIs need to label PSK fields as "PSK" or "TLS-PSK", rather than as "shared secret".
+The historic methods of signing RADIUS packets have not yet been cracked, but they are believed to be much less secure than modern TLS.  Therefore, when a RADIUS shared secret is used to sign RADIUS/UDP or RADIUS/TCP packets, that shared secret MUST NOT be used with TLS-PSK.  If the secrets were to be reused, then an attack on historic RADIUS cryptography could be trivially leveraged to decrypt TLS-PSK sessions.  Therefore in order to prevent confusion between shared secrets and TLS-PSKs, management interfaces and APIs need to label PSK fields as "PSK" or "TLS-PSK", rather than as "shared secret".
 
 With TLS-PSK, RADIUS/TLS clients MUST permit the configuration of a RADIUS server IP address or host name, because dynamic server lookups {{RFC7585}} can only be used if servers use certificates.
 
@@ -203,11 +203,13 @@ A server may be configured with additional site-local policies associated with t
 
 We define practices for TLS-PSK by analogy with the RADIUS/UDP use-case, and by extending the additional policies associated with the client.  The PSK identity replaces the source IP address as the client identifier.  The PSK replaces the shared secret as proof of client authenticity and shared trust.  However, systems implementing RADIUS/TLS {{RFC6614}} and RADIUS/DTLS {{RFC7360}} MUST still use the shared secret as discussed in those specifications.  Any PSK is only used by the TLS layer, and has no effect on the RADIUS data which is being transported.  That is, the RADIUS data transported in a TLS tunnel is the same no matter if client authentication is done via PSK or by client certificates.  The encoding of the RADIUS data is entirely unaffected by the use (or not) of PSKs and client certificates.
 
-In order to securely support dynamic source IP addresses for clients, we also require that servers limit clients based on a network range.  The alternative would be to suggest that RADIUS servers allow any source IP address to connect and try TLS-PSK, which could be a security risk.  When RADIUS servers do no source IP address filtering, that opennes it easier for attackers to send malicious traffic to the server.  An issue with a TLS library or even a TCP/IP stack could permit the attacker to gain unwarranted access.  In contrast, when IP address filtering is done, attackers generally must first gain access to a secure network before attacking the RADIUS server.
+In order to securely support dynamic source IP addresses for clients, we also require that servers limit clients based on a network range.  The alternative would be to suggest that RADIUS servers allow any source IP address to connect and try TLS-PSK, which could be a security risk.  When RADIUS servers do no source IP address filtering, it is easier for attackers to send malicious traffic to the server.  An issue with a TLS library or even a TCP/IP stack could permit the attacker to gain unwarranted access.  In contrast, when IP address filtering is done, attackers generally must first gain access to a secure network before attacking the RADIUS server.
 
-Even where {{RFC7585}} dynamic discovery is not used, servers SHOULD NOT permit TLS-PSK to be used across the wider Internet.  The intent for TLS-PSK is for it to be used in internal / secured networks, where clients come from a small number of known locations.  In contrast, certificates can be generated and assigned to clients without any interaction with the RADIUS server.  Therefore if the RADIUS server needs to accept connections from clients at unknown locations, the only secure method is to use client certificates.
+Even where {{RFC7585}} dynamic discovery is not used, servers SHOULD NOT permit TLS-PSK to be used across the wider Internet.  The intent for TLS-PSK is for it to be used in internal / secured networks, where clients come from a small number of known locations.  In contrast, certificates can be generated and assigned to clients without any interaction with the RADIUS server.  Therefore if the RADIUS server needs to accept connections from clients at unknown locations, a more secure method is to use client certificates.
 
-The benefits of TLS-PSK are in easing management and in administative overhead, not in securing traffic from resourceful attackers.  Where TLS-PSK is used across the Internet, PSKs MUST contain at least 256 octets of entropy.
+If a client system is compromised, its complete configuration is exposed to the attacker.  Exposing a client certificate means that the attacker can pretend to be the client.  In contrast, exposing a PSK means that the attacker can not only pretend to be the client, but can also pretend to be the server.XXX
+
+The benefits of TLS-PSK are in easing management and in administative overhead, not in securing traffic from resourceful attackers.  Where TLS-PSK is used across the Internet, PSKs MUST contain at least 256 bits of entropy.
 
 For example, a RADIUS server could be configured to be accept connections from a source network of 192.0.2.0/24.  The server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
 
@@ -251,7 +253,7 @@ That is, client configuration is relatively simple: use a particular set of cred
 
 ### Resumption
 
-Implementations MUST support resumption.  In many cases session tickets can be authenticated solely by the server, and do not require querying a database.  The use of resumption allows the system to better scale to higher loads.
+Implementations SHOULD support resumption.  In many cases session tickets can be authenticated solely by the server, and do not require querying a database.  The use of resumption can allow the system to better scale to higher loads.
 
 However, the above discussion of PSK identities is complicated by the use of PSKs for resumption in TLS 1.3.  A server which receives a PSK identity via TLS typically cannot query the TLS layer to see if this identity is for a resumed session, or is instead a static pre-provisioned identity.  This confusion complicates server implementations.
 
