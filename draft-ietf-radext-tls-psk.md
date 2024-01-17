@@ -90,7 +90,7 @@ An implementation MUST NOT use the same PSK for TLS 1.3 and for earlier versions
 
 It is RECOMMENDED that systems follow the directions of {{RFC9257, Section 6}} for the use of external PSKs in TLS.  That document provides extremely useful guidance on generating and using PSKs.
 
-Implementations MUST support PSKs of at least 32 octets in length, and SHOULD support PSKs of 64 octets or more.  As the PSKs are generally hashed before being used in TLS, the useful entropy of a PSK is limited by the size of the hash output.  This output may be 256, 384, or 512 bits in length.  Never the less, it is good practice for implementations to allow entrty of PSKs of more than 64 octets, as the PSK may be in a form other than bare binary data.  Implementations which limit the PSK to a maximum of 64 octets are likely to use PSKs which have much less than 512 bits of entropy.  That is, a PSK with high entropy may be expanded via some construct (e.g. base32 as in the example below) in order to make it easier for people to interact with.  Where 512 bits of entropy are input to an encoding construct, the output may be larger than 64 octets.
+Implementations MUST support PSKs of at least 32 octets in length, and SHOULD support PSKs of 64 octets or more.  As the PSKs are generally hashed before being used in TLS, the useful entropy of a PSK is limited by the size of the hash output.  This output may be 256, 384, or 512 bits in length.  Never the less, it is good practice for implementations to allow entry of PSKs of more than 64 octets, as the PSK may be in a form other than bare binary data.  Implementations which limit the PSK to a maximum of 64 octets are likely to use PSKs which have much less than 512 bits of entropy.  That is, a PSK with high entropy may be expanded via some construct (e.g. base32 as in the example below) in order to make it easier for people to interact with.  Where 512 bits of entropy are input to an encoding construct, the output may be larger than 64 octets.
 
 Implementations MUST require that PSKs be at least 16 octets in length, which SHOULD be derived from a source with at least 128 bits of entropy.  That is, short PSKs MUST NOT be permitted to be used, and PSKs MUST be uniformly random.   The strength of the PSK is not determined by the length of the PSK, but instead by the number of bits of entropy which it contains.  People are not good at creating data with high entropy, so a source of cryptographically secure random numbers MUST be used.
 
@@ -145,7 +145,7 @@ Note that the PSK identity is sent in the clear, and is therefore visible to att
 
 Implementations MUST support PSK Identities of 128 octets, and SHOULD support longer PSK identities.  We note that while TLS provides for PSK identities of up to 2^16-1 octets in length, there are few practical uses for extremely long PSK identities.
 
-It is up to administrators and implementations as to how they differentiate administratively provisioned PSK identities from automatically provisioned identities used in TLS 1.3 session tickets.  One approach could be to have administratively provisioned identities contain an NAI such as described above, while session tickets contain large blobs of opaque, encrypted, and signed text.  It should then be relatively straightforward to differentiate the two types of identities.  One is UTF-8, the other is not.  One is not signed and unverified, the other is signed and verified.
+It is up to administrators and implementations as to how they differentiate administratively provisioned PSK identities from automatically provisioned identities used in TLS 1.3 session tickets.  One approach could be to have administratively provisioned identities contain an NAI such as described above, while session tickets contain large blobs of opaque, encrypted, and authenticated text.  It should then be relatively straightforward to differentiate the two types of identities.  One is UTF-8, the other is not.  One is not authenticated, the other is authenticated.
 
 ### Security of PSK Identities
 
@@ -155,7 +155,7 @@ It is not safe to use a raw PSK Identity to look up a corresponding PSK.  The PS
 
 As such, implementations MUST validate the identity prior to it being used as a lookup key.  When the identity is passed to an external API (e.g. database lookup), implementations MUST either escape any characters in the identity which are invalid for that API, or else reject the identity entirely.  The exact form of any escaping depends on the API, and we cannot document all possible methods here.  However, a few basic validation rules are suggested, as outlined below.  Any identity which is rejected by these validation rules SHOULD cause the server to close the TLS connection.
 
-The suggested validation rules for identies used outside of resumption are as follows:
+The suggested validation rules for identities used outside of resumption are as follows:
 
 * Identities longer than a fixed maximum SHOULD be rejected.  The limit is implementation dependent, but SHOULD NOT be less than 128, and SHOULD NOT be more than 1024.
 
@@ -227,7 +227,7 @@ Even where {{RFC7585}} dynamic discovery is not used, servers SHOULD NOT permit 
 
 If a client system is compromised, its complete configuration is exposed to the attacker.  Exposing a client certificate means that the attacker can pretend to be the client.  In contrast, exposing a PSK means that the attacker can not only pretend to be the client, but can also pretend to be the server.
 
-The benefits of TLS-PSK are in easing management and in administative overhead, not in securing traffic from resourceful attackers.  Where TLS-PSK is used across the Internet, PSKs MUST contain at least 256 bits of entropy.
+The benefits of TLS-PSK are in easing management and in administrative overhead, not in securing traffic from resourceful attackers.  Where TLS-PSK is used across the Internet, PSKs MUST contain at least 256 bits of entropy.
 
 For example, a RADIUS server could be configured to be accept connections from a source network of 192.0.2.0/24.  The server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
 
@@ -255,7 +255,7 @@ Once a connection has been established, the server MUST NOT process any applicat
 
 Where the server does not receive TLS-PSK from the client, it proceeds with another authentication method such as client certificates.  Such requirements are discussed elsewhere, most notably in {{RFC6614}} and {{RFC7360}}.
 
-Returning to the subject of IP address lookips, an implementation may perform two independent IP address lookups.  First, to check if the connection allowed at all, and secod to check if the connection is authorized for this particular client.  One or both checks may be used by a particular implementation.  The two sets of IP addresses can overlap, and implementations SHOULD support that capability.
+Returning to the subject of IP address lookups, an implementation may perform two independent IP address lookups.  First, to check if the connection allowed at all, and second to check if the connection is authorized for this particular client.  One or both checks may be used by a particular implementation.  The two sets of IP addresses can overlap, and implementations SHOULD support that capability.
 
 Depending on the implementation, one or more clients may share a list of allowed network ranges.  Alternately, the allowed network ranges for two clients can overlap only partially, or not at all.  All of these possibilities MUST be supported by the server implementation.
 
@@ -267,7 +267,7 @@ If the PSK is not verified, then the server MUST close the connection.  While TL
 
 A client MUST use only one authentication method for TLS.  An authentication method is either TLS-PSK, client certificates, or some other method supported by TLS.
 
-That is, client configuration is relatively simple: use a particular set of credentials to authenticate to a particular server.  While clients may support multiple servers and fail-over or load-balancing, that configuration is generally orthoganal to the choice of which credentials to use.
+That is, client configuration is relatively simple: use a particular set of credentials to authenticate to a particular server.  While clients may support multiple servers and fail-over or load-balancing, that configuration is generally orthogonal to the choice of which credentials to use.
 
 ### Resumption
 
@@ -275,7 +275,7 @@ Implementations SHOULD support resumption.  In many cases session tickets can be
 
 However, the above discussion of PSK identities is complicated by the use of PSKs for resumption in TLS 1.3.  A server which receives a PSK identity via TLS typically cannot query the TLS layer to see if this identity is for a resumed session, or is instead a static pre-provisioned identity.  This confusion complicates server implementations.
 
-One way for a server to tell the difference between the two kinds of identies is via construction.  Identities used for resumption can be constructed via a fixed format, such as recommended by {{?RFC5077, Section 4}}.  A static pre-provisioned identity could be in format of an NAI, as given in {{RFC7542}}.  An implementation could therefore examine the incoming identity, and determine from the identity alone what kind of authentication was being performed.
+One way for a server to tell the difference between the two kinds of identities is via construction.  Identities used for resumption can be constructed via a fixed format, such as recommended by {{?RFC5077, Section 4}}.  A static pre-provisioned identity could be in format of an NAI, as given in {{RFC7542}}.  An implementation could therefore examine the incoming identity, and determine from the identity alone what kind of authentication was being performed.
 
 An alternative way for a server to distinguish the two kinds of identities is to maintain two tables.  One table would contain static identities, as the logical client table described above.  Another table could be the table of identities handed out for resumption.  The server would then look up any PSK identity in one table, and if not found, query the other one.  An identity would be found in a table, in which case it can be authenticated.  Or, the identity would not be found in either table, in which case it is unknown, and the server MUST close the connection.
 
