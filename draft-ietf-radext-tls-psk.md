@@ -1,14 +1,14 @@
 ---
 title: RADIUS and TLS-PSK
 abbrev: RADIUS and TLS-PSK
-docname: draft-ietf-radext-tls-psk-06
+docname: draft-ietf-radext-tls-psk-07
 
 stand_alone: true
 ipr: trust200902
 area: Internet
 wg: RADEXT Working Group
 kw: Internet-Draft
-cat: info
+cat: bcp
 submissionType: IETF
 
 pi:    # can use array (if all yes) or hash here
@@ -146,6 +146,27 @@ Note that the PSK identity is sent in the clear, and is therefore visible to att
 Implementations MUST support PSK Identities of 128 octets, and SHOULD support longer PSK identities.  We note that while TLS provides for PSK identities of up to 2^16-1 octets in length, there are few practical uses for extremely long PSK identities.
 
 It is up to administrators and implementations as to how they differentiate administratively provisioned PSK identities from automatically provisioned identities used in TLS 1.3 session tickets.  One approach could be to have administratively provisioned identities contain an NAI such as described above, while session tickets contain large blobs of opaque, encrypted, and authenticated text.  It should then be relatively straightforward to differentiate the two types of identities.  One is UTF-8, the other is not.  One is not authenticated, the other is authenticated.
+
+Servers MUST assign and/or track session resumption identities in a
+way which facilities the ability to distinguish those identities from
+pre-configured ones ,and which enables them to both find and validate
+the session resumption ticket.
+
+A sample validation flow for TLS-PSK identities could be as follows:
+
+> PSK identities provided via an administration interface are enforced to be only UTF-8 on both client and server
+> The client treats session tickets received from the server as opaque blobs
+> When the server issues session tickets for resumption, the server ensures that they are not valid UTF-8
+> One way to do this is to use stateless resumption with a forced non-UTF-8 key_name per {{?RFC5077, Section 4}}, such as by setting one octet to 0x00.
+> When receiving TLS, the server receives Client-Hello containing a PSK, and checks if the identity is valid UTF-8.
+>> If yes, it searches for a pre-configured client which matches that identity
+>>> If the identity is found, authenticates the client via PSK
+>>> else the identity is invalid, and the server closes the connection.
+>> If the identity is not UTF-8, try resumption, which can be handled by a TLS library
+>>> If the TLS library verifies the session ticket, resumption has happened, and the connection is established.
+>>> else the server ignores the session ticker, and performs normal TLS handshake with a certificate.
+
+This validation flow is only suggested.  Other validation methods are possible.
 
 ### Security of PSK Identities
 
