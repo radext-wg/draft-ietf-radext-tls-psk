@@ -1,7 +1,7 @@
----
+--
 title: RADIUS and TLS-PSK
 abbrev: RADIUS and TLS-PSK
-docname: draft-ietf-radext-tls-psk-07
+docname: draft-ietf-radext-tls-psk-09
 
 stand_alone: true
 ipr: trust200902
@@ -33,6 +33,7 @@ normative:
   RFC9325:
 
 informative:
+  RFC5077:
   RFC6613:
   RFC7585:
   RFC8446:
@@ -46,13 +47,19 @@ venue:
 
 --- abstract
 
-This document gives implementation and operational considerations for using TLS-PSK with RADIUS/TLS (RFC6614) and RADIUS/DTLS (RFC7360).
+This document gives implementation and operational considerations for using TLS-PSK with RADIUS/TLS (RFC6614) and RADIUS/DTLS (RFC7360).  The purpose of the document is to help smooth the operational transition from the use of the insecure RADIUS/UDP to the use of the much more secure RADIUS/TLS.
 
 --- middle
 
 # Introduction
 
 The previous specifications "Transport Layer Security (TLS) Encryption for RADIUS"  {{RFC6614}} and "Datagram Transport Layer Security (DTLS) as a Transport Layer for RADIUS" {{RFC7360}} defined how (D)TLS can be used as a transport protocol for RADIUS.  However, those documents do not provide guidance for using TLS-PSK with RADIUS.  This document provides that missing guidance, and gives implementation and operational considerations.
+
+The purpose of the document is to help smooth the operational transition from the use of the insecure RADIUS/UDP to the use of the much more secure RADIUS/TLS.  While we recognize that using PSKs is often less preferable to using public / private keys, the operational model of PSKs follows the legacy RADIUS "shared secret" model.  As such, it can be easier for implementers and operators to transition to TLS when that transition is offered as a series of small changes.
+
+The intent for TLS-PSK is for it to be used in internal / secured networks, where clients come from a small number of known locations.  This situation mirrors the use-case of shared secrets.  TLS-PSK is not suitable where servers are not statically known, such as with dynamic server lookups {{RFC7585}}.
+
+TLS-PSKs have the same issue of symmetric information between client and server: both parties know the secret key.  A client could, in theory, pretend to be a server.  In contrast, certificates are asymmetric, where it is impossible for the parties to assume the others identity.  This symmetry in TLS-PSK is likely to cause limited security problems.  RADIUS has used shared secrets for thirty years, and this vulnerability has not been known to be exploited.  As such, we believe that this known issue is acceptable for TLS-PSK.
 
 Unless it is explicitly called out that a recommendation applies to
 TLS alone or to DTLS alone, each recommendation applies to both TLS
@@ -90,26 +97,28 @@ An implementation MUST NOT use the same PSK for TLS 1.3 and for earlier versions
 
 It is RECOMMENDED that systems follow the directions of {{RFC9257, Section 6}} for the use of external PSKs in TLS.  That document provides extremely useful guidance on generating and using PSKs.
 
-Implementations MUST support PSKs of at least 32 octets in length, and SHOULD support PSKs of 64 octets or more.  As the PSKs are generally hashed before being used in TLS, the useful entropy of a PSK is limited by the size of the hash output.  This output may be 256, 384, or 512 bits in length.  Never the less, it is good practice for implementations to allow entry of PSKs of more than 64 octets, as the PSK may be in a form other than bare binary data.  Implementations which limit the PSK to a maximum of 64 octets are likely to use PSKs which have much less than 512 bits of entropy.  That is, a PSK with high entropy may be expanded via some construct (e.g. base32 as in the example below) in order to make it easier for people to interact with.  Where 512 bits of entropy are input to an encoding construct, the output may be larger than 64 octets.
+Implementations MUST support PSKs of at least 32 octets in length, and SHOULD support PSKs of 64 octets or more.  As the PSKs are generally hashed before being used in TLS, the useful entropy of a PSK is limited by the size of the hash output.  This output may be 256, 384, or 512 bits in length.  Nevertheless, it is good practice for implementations to allow entry of PSKs of more than 64 octets, as the PSK may be in a form other than bare binary data.  Implementations which limit the PSK to a maximum of 64 octets are likely to use PSKs which have much less than 512 bits of entropy.  That is, a PSK with high entropy may be expanded via some construct (e.g. base32 as in the example below) in order to make it easier for people to interact with.  Where 512 bits of entropy are input to an encoding construct, the output may be larger than 64 octets.
 
-Implementations MUST require that PSKs be at least 16 octets in length, which SHOULD be derived from a source with at least 128 bits of entropy.  That is, short PSKs MUST NOT be permitted to be used, and PSKs MUST be uniformly random.   The strength of the PSK is not determined by the length of the PSK, but instead by the number of bits of entropy which it contains.  People are not good at creating data with high entropy, so a source of cryptographically secure random numbers MUST be used.
+Implementations MUST require that PSKs be at least 16 octets in length, which SHOULD be derived from a source with at least 128 bits of entropy.  That is, short PSKs MUST NOT be permitted to be used, and PSKs MUST be random.   The strength of the PSK is not determined by the length of the PSK, but instead by the number of bits of entropy which it contains.  People are not good at creating data with high entropy, so a source of cryptographically secure random numbers MUST be used.
 
 Administrators SHOULD use PSKs of at least 24 octets, generated using a source of cryptographically secure random numbers.  Implementers needing a secure random number generator should see {{RFC8937}} for for further guidance.  PSKs are not passwords, and administrators should not try to manually create PSKs.
 
-Passwords are generally intended to be remembered and entered by people on a regular basis.  In contrast, PSKs are intended to be entered once, and then automatically saved in a system configuration.  As such, due to the limited entropy of passwords, they are not acceptable for use with TLS-PSK, and would only be acceptable for use with a password-authenticated key exchange (PAKE) TLS method {{?RFC8492}}.
+PSKs are in their purest form are opaque tokens, represented as an undistinguished series of octets.  Where PSKs are expected to be managed automatically by scripted methods, this format is acceptable.  However, in some cases it is necessary for administrators to share PSKs, in which case humanly readable formats may be useful.
+
+Where user passwords are generally intended to be remembered and entered by people on a regular basis,  PSKs are intended to be entered once, and then automatically saved in a system configuration.  As such, due to the limited entropy of passwords, they are not acceptable for use with TLS-PSK, and would only be acceptable for use with a password-authenticated key exchange (PAKE) TLS method {{?RFC8492}}.  Implementations MUST therefore support entry and storage of PSKs as undistinguished octets.
 
 We also incorporate by reference the requirements of {{RFC7360, Section 10.2}} when using PSKs.
 
-In order to guide Implementers, we give an example script below which generates random PSKs.  While the script is not portable to all possible systems, the intent here is to document a concise and simple method for creating PSKs which are both secure, and humanly manageable.
+In order to guide Implementers, we give an example script below which generates random PSKs.  While the script is not portable to all possible systems, the intent here is to document a concise and simple example of creating PSKs which are both secure, and humanly manageable.  This document does not mandate that the PSKs follow this format, or any other format.
 
 ~~~~
-#!/usr/bin/env perl
-use MIME::Base32;
-use Crypt::URandom();
-print join('-', unpack("(A4)*", lc encode_base32(Crypt::URandom::urandom(16)))), "\n";
+#!/usr/bin/env python3
+import base64, secrets
+str = base64.b32encode(secrets.token_bytes(16)).decode().rstrip('=').lower()
+print('-'.join((str[i:i + 4] for i in range(0, len(str), 4))))
 ~~~~
 
-This script reads 128 bits (16 octets) of random data from a secure source, encodes it in Base32, and then formats it to be more humanly manageable.  The generated keys are of the form "yttb-4gv2-ynfk-jbjh-2dja-cj7e-am".  This form of PSK will be accepted by any implementation which supports at least 32 octets for PSKs.  Larger PSKs can be generated by passing larger values to the "urandom()" function.  The above derivation assumes that the random source returns one bit of entropy for every bit of randomness which is returned.  Sources failing that assumption are NOT RECOMMENDED.
+This script reads 128 bits (16 octets) of random data from a secure source, encodes it in Base32, and then formats it to be more humanly manageable.  The generated keys are of the form "yttb-4gv2-ynfk-jbjh-2dja-cj7e-am".  This form of PSK will be accepted by any implementation which supports at least 32 octets for PSKs.  Larger PSKs can be generated by passing larger values to the "token_bytes" function.  The above derivation assumes that the random source returns one bit of entropy for every bit of randomness which is returned.  Sources failing that assumption are NOT RECOMMENDED.
 
 ### Interaction between PSKs and RADIUS Shared Secrets
 
@@ -125,9 +134,10 @@ Note that the shared secret of "radsec" given in {{RFC6614}} can be used across 
 
 There may be use-cases for using one shared secret across multiple RADIUS clients.  There may similarly be use-cases for sharing a PSK across multiple RADIUS clients.   Details of the possible attacks on reused PSKs are given in {{RFC9257, Section 4.1}}.
 
-There are few, if any, use-cases for using a PSK as a shared secret, or vice-versa.
+There are no known use-cases for using a PSK as a shared secret, or vice-versa.
 
-Implementations SHOULD NOT provide user interfaces which allow both PSKs and shared secrets to be entered at the same time.  There is too much of a temptation for administrators to enter the same value in both fields, which would violate the limitations given above.  Implementations MUST NOT use a "shared secret" field as a way for administrators to enter PSKs.  The PSK entry fields MUST be labeled as being related to PSKs, and not to shared secrets.
+Implementations MUST reject configuration attempts that try to use the
+same value for PSK and shared secret.  To prevent administrative errors, implementations SHOULD NOT provide user interfaces which allow both PSKs and shared secrets to be entered at the same time.  There is too much of a temptation for administrators to enter the same value in both fields, which would violate the limitations given above.  Implementations MUST NOT use a "shared secret" field as a way for administrators to enter PSKs.  The PSK entry fields MUST be labeled as being related to PSKs, and not to shared secrets.
 
 ## PSK Identities
 
@@ -139,7 +149,7 @@ Implementations SHOULD NOT provide user interfaces which allow both PSKs and sha
 
 These definitions appear to be in conflict.  This conflict is addressed in {{RFC9257, Section 6.1.1}}, which discusses requirements for encoding and comparison of PSK identities.  It is RECOMMENDED that systems follow the directions of {{RFC9257, Section 6.1.1}} when using PSK Identities for RADIUS/TLS.
 
-In general, implements should allow for external PSK identities to follow {{RFC4279}} and be UTF-8, while PSK identities provisioned as part of resumption are automatically provisioned, and therefore follow {{RFC8446}}.
+In general, implementers should allow for external PSK identities to follow {{RFC4279}} and be UTF-8, while PSK identities provisioned as part of resumption are automatically provisioned, and therefore follow {{RFC8446}}.
 
 Note that the PSK identity is sent in the clear, and is therefore visible to attackers.  Where privacy is desired, the PSK identity could be either an opaque token generated cryptographically, or perhaps in the form of a Network Access Identifier (NAI) {{?RFC7542}}, where the "user" portion is an opaque token.  For example, an NAI could be "68092112@example.com".  If the attacker already knows that the client is associated with "example.com", then using that domain name in the PSK identity offers no additional information.  In contrast, the "user" portion needs to be both unique to the client and private, so using an opaque token there is a more secure approach.
 
@@ -152,19 +162,29 @@ way which facilities the ability to distinguish those identities from
 externally configured PSK identities, and which enables them to both find and validate
 the session resumption PSK.
 
-A sample validation flow for TLS-PSK identities could be as follows:
+A sample validation flow for TLS-PSK identities could be performed via the following steps:
 
-> PSK identities provided via an administration interface are enforced to be only UTF-8 on both client and server
-> The client treats session tickets received from the server as opaque blobs
-> When the server issues session tickets for resumption, the server ensures that they are not valid UTF-8
-> One way to do this is to use stateless resumption with a forced non-UTF-8 key_name per {{?RFC5077, Section 4}}, such as by setting one octet to 0x00.
-> When receiving TLS, the server receives Client-Hello containing a PSK, and checks if the identity is valid UTF-8.
->> If yes, it searches for a pre-configured client which matches that identity
->>> If the identity is found, authenticates the client via PSK
->>> else the identity is invalid, and the server closes the connection.
->> If the identity is not UTF-8, try resumption, which can be handled by a TLS library
->>> If the TLS library verifies the session ticket, resumption has happened, and the connection is established.
->>> else the server ignores the session ticker, and performs normal TLS handshake with a certificate.
+> 1. PSK identities provided via an administration interface are enforced to be only UTF-8 on both client and server.
+>
+> 2. The client treats session tickets received from the server as opaque blobs.
+>
+> 3. When the server issues session tickets for resumption, the server ensures that they are not valid UTF-8.
+>
+> 4. One way to do this is to use stateless resumption with a forced non-UTF-8 key_name per {{RFC5077, Section 4}}, such as by setting one octet to 0x00.
+>
+> 5 When receiving TLS, the server receives Client-Hello containing a PSK, and checks if the identity is valid UTF-8.
+>
+>> 5.1. If yes, it searches for a pre-configured client which matches that identity.
+>>
+>>> 5.1.1. If the identity is found, authenticates the client via PSK.
+>>>
+>>> 5.1.2. else the identity is invalid, and the server closes the connection.
+>>
+>> 5.2 If the identity is not UTF-8, try resumption, which is usually be handled by a TLS library.
+>>
+>>> 5.2.1 If the TLS library verifies the session ticket, resumption has happened, and the connection is established.
+>>>
+>>> 5.2.2. else the server ignores the session ticket, and performs normal TLS handshake with a certificate.
 
 This validation flow is only suggested.  Other validation methods are possible.
 
@@ -276,7 +296,7 @@ Once a connection has been established, the server MUST NOT process any applicat
 
 Where the server does not receive TLS-PSK from the client, it proceeds with another authentication method such as client certificates.  Such requirements are discussed elsewhere, most notably in {{RFC6614}} and {{RFC7360}}.
 
-Returning to the subject of IP address lookups, an implementation may perform two independent IP address lookups.  First, to check if the connection allowed at all, and second to check if the connection is authorized for this particular client.  One or both checks may be used by a particular implementation.  The two sets of IP addresses can overlap, and implementations SHOULD support that capability.
+An implementation may perform two independent IP address lookups.  First, to check if the connection allowed at all, and second to check if the connection is authorized for this particular client.  One or both checks may be used by a particular implementation.  The two sets of IP addresses can overlap, and implementations SHOULD support that capability.
 
 Depending on the implementation, one or more clients may share a list of allowed network ranges.  Alternately, the allowed network ranges for two clients can overlap only partially, or not at all.  All of these possibilities MUST be supported by the server implementation.
 
@@ -292,9 +312,9 @@ That is, client configuration is relatively simple: use a particular set of cred
 
 ### Resumption
 
-Implementations SHOULD support resumption.  In many cases session tickets can be authenticated solely by the server, and do not require querying a database.  The use of resumption can allow the system to better scale to higher loads.
+Implementations SHOULD support resumption.  In many cases session tickets can be authenticated solely by the server, and do not require querying a database.  The use of resumption can allow the system to better scale to higher loads.  There will also be systems which support both TLS-PSK and other TLS-based authentication methods such as certificates.  It is therefore vital for servers to be able to distinguish the use-case of TLS-PSK with pre-configured identities from TLS-PSK which is being used for resumptions.
 
-However, the above discussion of PSK identities is complicated by the use of PSKs for resumption in TLS 1.3.  A server which receives a PSK identity via TLS typically cannot query the TLS layer to see if this identity is for a resumed session, or is instead a static pre-provisioned identity.  This confusion complicates server implementations.
+The above discussion of PSK identities is therefore complicated by the use of PSKs for resumption in TLS 1.3.  A server which receives a PSK identity via TLS typically cannot query the TLS layer to see if this identity is for a resumed session (which is possibly for another TLS authentication method), or is instead a static pre-provisioned identity.  This confusion complicates server implementations.
 
 One way for a server to tell the difference between the two kinds of identities is via construction.  Identities used for resumption can be constructed via a fixed format, such as recommended by {{?RFC5077, Section 4}}.  A static pre-provisioned identity could be in format of an NAI, as given in {{RFC7542}}.  An implementation could therefore examine the incoming identity, and determine from the identity alone what kind of authentication was being performed.
 
