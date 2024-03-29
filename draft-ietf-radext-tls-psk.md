@@ -149,18 +149,18 @@ same value for PSK and shared secret.  To prevent administrative errors, impleme
 
 These definitions appear to be in conflict.  This conflict is addressed in {{RFC9257, Section 6.1.1}}, which discusses requirements for encoding and comparison of PSK identities.  It is RECOMMENDED that systems follow the directions of {{RFC9257, Section 6.1.1}} when using PSK Identities for RADIUS/TLS.
 
-In general, implementers should allow for administratively provisioned PSK identities to follow {{RFC4279}} and be UTF-8, while PSK identities provisioned as part of resumption are automatically provisioned, and therefore follow {{RFC8446}}.
+In general, implementers should allow for external PSK identities to follow {{RFC4279}} and be UTF-8, while PSK identities provisioned as part of resumption are automatically provisioned, and therefore follow {{RFC8446}}.
 
 Note that the PSK identity is sent in the clear, and is therefore visible to attackers.  Where privacy is desired, the PSK identity could be either an opaque token generated cryptographically, or perhaps in the form of a Network Access Identifier (NAI) {{?RFC7542}}, where the "user" portion is an opaque token.  For example, an NAI could be "68092112@example.com".  If the attacker already knows that the client is associated with "example.com", then using that domain name in the PSK identity offers no additional information.  In contrast, the "user" portion needs to be both unique to the client and private, so using an opaque token there is a more secure approach.
 
 Implementations MUST support PSK Identities of 128 octets, and SHOULD support longer PSK identities.  We note that while TLS provides for PSK identities of up to 2^16-1 octets in length, there are few practical uses for extremely long PSK identities.
 
-It is up to administrators and implementations as to how they differentiate administratively provisioned PSK identities from automatically provisioned identities used in TLS 1.3 session tickets.  One approach could be to have administratively provisioned identities contain an NAI such as described above, while session tickets contain large blobs of opaque, encrypted, and authenticated text.  It should then be relatively straightforward to differentiate the two types of identities.  One is UTF-8, the other is not.  One is not authenticated, the other is authenticated.
+It is up to administrators and implementations as to how they differentiate external PSK identities from session resumption PSK identities used in TLS 1.3 session tickets.  One approach could be to have externally provisioned PSK identities contain an NAI such as described above, while session resumption PSK identities contain large blobs of opaque, encrypted, and authenticated text.  It should then be relatively straightforward to differentiate the two types of identities.  One is UTF-8, the other is not.  One is not authenticated, the other is authenticated.
 
-Servers MUST assign and/or track session resumption identities in a
+Servers MUST assign and/or track session resumption PSK identities in a
 way which facilities the ability to distinguish those identities from
-pre-configured ones ,and which enables them to both find and validate
-the session resumption ticket.
+externally configured PSK identities, and which enables them to both find and validate
+the session resumption PSK.
 
 A sample validation flow for TLS-PSK identities could be performed via the following steps:
 
