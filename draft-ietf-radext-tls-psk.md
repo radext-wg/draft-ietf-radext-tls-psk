@@ -1,7 +1,7 @@
---
+---
 title: RADIUS and TLS-PSK
 abbrev: RADIUS and TLS-PSK
-docname: draft-ietf-radext-tls-psk-09
+docname: draft-ietf-radext-tls-psk-10
 
 stand_alone: true
 ipr: trust200902
@@ -70,6 +70,14 @@ This document uses "shared secret" to mean "RADIUS shared secret", and Pre-Share
 # Terminology
 
 {::boilerplate bcp14}
+
+* External PSK
+
+> A PSK (along with a related PSK Identity) which is administratively configured.  That is, one which is external to TLS, and is not created by the TLS subsystem.
+
+* Resumption PSK
+
+> A PSK (along with a related PSK Identity) which is created by the TLS subsystem and/or application, for use with resumption.
 
 # History
 
@@ -141,11 +149,7 @@ same value for PSK and shared secret.  To prevent administrative errors, impleme
 
 ## PSK Identities
 
-{{RFC4279, Section 5.1}} requires that PSK identities be encoded in UTF-8 format.  However, {{RFC8446, Section 4.6.1}} reuses PSKs and the PSK identity for resumption, and defines the ticket as:
-
-> the value of the ticket to be used as the PSK identity.  The
-> ticket itself is an opaque label.  It MAY be either a database
-> lookup key or a self-encrypted and self-authenticated value.
+{{RFC4279, Section 5.1}} requires that PSK identities be encoded in UTF-8 format.  However, {{RFC8446, Section 4.2.11}} describes the "Pre-Shared Key Extension" and defines the ticket as an opaque string: "opaque identity<1..2^16-1>;".  This PSK is then used in {{RFC8446, Section 4.6.1}} for resumption.
 
 These definitions appear to be in conflict.  This conflict is addressed in {{RFC9257, Section 6.1.1}}, which discusses requirements for encoding and comparison of PSK identities.  It is RECOMMENDED that systems follow the directions of {{RFC9257, Section 6.1.1}} when using PSK Identities for RADIUS/TLS.
 
@@ -240,10 +244,12 @@ With TLS-PSK, RADIUS/TLS clients MUST permit the configuration of a RADIUS serve
 
 In order to support clients with TLS-PSK, server implementations MUST allow the use of a pre-shared key (TLS-PSK) for RADIUS/TLS.
 
+Systems which act as both client and server at the same time MUST NOT share or reuse PSK identities between incoming and outgoing connections.  Doing so would open up the systems to attack, as discussed in {{RFC9257, Section 4.1}}.
+
 For TLS 1.3, Implementations MUST support "psk_dhe_ke" Pre-Shared Key Exchange Mode in TLS 1.3 as discussed in {{RFC8446, Section 4.2.9}} and in {{RFC9257, Section 6}}.  Implementations MUST implement the recommended cipher suites in {{RFC9325, Section 4.2}} for TLS 1.2, and in {{RFC8446, Section 9.1}} for TLS 1.3.  In order to future-proof these recommendations, we give the following recommendations:
 
 * Implementations SHOULD use the "Recommended" cipher suites listed in the IANA "TLS Cipher Suites" registry,
-  * for TLS 1.3, the use "psk_dhe_ke" PSK key exchange mode,
+  * for TLS 1.3, use "psk_dhe_ke" PSK key exchange mode,
   * for TLS 1.2 and earlier, use cipher suites which require ephemeral keying.
 
 The following section(s) describe guidance for RADIUS server implementations and deployments.  We first give an overview of current practices, and then extend and/or replace those practices for TLS-PSK.
