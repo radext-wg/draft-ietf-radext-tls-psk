@@ -1,5 +1,5 @@
 ---
-title: RADIUS and TLS-PSK
+title: Operational Considerations for RADIUS and TLS-PSK
 abbrev: RADIUS and TLS-PSK
 docname: draft-ietf-radext-tls-psk-10
 
@@ -55,17 +55,17 @@ This document gives implementation and operational considerations for using TLS-
 
 The previous specifications "Transport Layer Security (TLS) Encryption for RADIUS"  {{RFC6614}} and "Datagram Transport Layer Security (DTLS) as a Transport Layer for RADIUS" {{RFC7360}} defined how (D)TLS can be used as a transport protocol for RADIUS.  However, those documents do not provide guidance for using TLS-PSK with RADIUS.  This document provides that missing guidance, and gives implementation and operational considerations.
 
+To clearly distinguish the various secrets and keys, this document uses "shared secret" to mean "RADIUS shared secret", and Pre-Shared Key (PSK) to mean secret keys which are used with TLS-PSK.
+
 The purpose of the document is to help smooth the operational transition from the use of the insecure RADIUS/UDP to the use of the much more secure RADIUS/TLS.  While we recognize that using PSKs is often less preferable to using public / private keys, the operational model of PSKs follows the legacy RADIUS "shared secret" model.  As such, it can be easier for implementers and operators to transition to TLS when that transition is offered as a series of small changes.
 
-The intent for TLS-PSK is for it to be used in internal / secured networks, where clients come from a small number of known locations.  This situation mirrors the use-case of shared secrets.  TLS-PSK is not suitable where servers are not statically known, such as with dynamic server lookups {{RFC7585}}.
+The intent for TLS-PSK is for it to be used in situations where there are a limited set of known clients.  This situation mirrors the use-case of shared secrets.  TLS-PSK is not suitable where servers are not previusly known, such as with client certificates, or with dynamic server lookups {{RFC7585}}.
 
 TLS-PSKs have the same issue of symmetric information between client and server: both parties know the secret key.  A client could, in theory, pretend to be a server.  In contrast, certificates are asymmetric, where it is impossible for the parties to assume the others identity.  This symmetry in TLS-PSK is likely to cause limited security problems.  RADIUS has used shared secrets for thirty years, and this vulnerability has not been known to be exploited.  As such, we believe that this known issue is acceptable for TLS-PSK.
 
 Unless it is explicitly called out that a recommendation applies to
 TLS alone or to DTLS alone, each recommendation applies to both TLS
 and DTLS.
-
-This document uses "shared secret" to mean "RADIUS shared secret", and Pre-Shared Key (PSK) to mean secrets which are used with TLS-PSK.
 
 # Terminology
 
@@ -79,7 +79,7 @@ This document uses "shared secret" to mean "RADIUS shared secret", and Pre-Share
 
 > A PSK (along with a related PSK Identity) which is created by the TLS subsystem and/or application, for use with resumption.
 
-# History
+# Justification of PSK.
 
 TLS deployments usually rely on certificates in most common uses. However, we recognize that it may be difficult to fully upgrade client implementations to allow for certificates to be used with RADIUS/TLS and RADIUS/DTLS.  These upgrades involve not only implementing TLS, but can also require significant changes to administration interfaces and application programming interfaces (APIs) in order to fully support certificates.
 
@@ -95,21 +95,21 @@ The requirements in this section apply to both client and server implementations
 
 ## Requirements on PSKs
 
-Reuse of a PSK in multiple versions of TLS (e.g. TLS 1.2 and TLS 1.3) is considered unsafe ({{RFC8446, Section E.7}}).  Where TLS 1.3 binds the PSK to a particular key derivation function, TLS 1.2 does not.  This binding means that it is possible to use the same PSK in different hashes, leading to the potential for attacking the PSK by comparing the hash outputs.  While there are no known insecurities, these uses are not known to be secure, and should therefore be avoided.
+Reuse of a PSK in multiple versions of TLS (e.g., TLS 1.2 and TLS 1.3) is considered unsafe ({{RFC8446, Section E.7}}).  Where TLS 1.3 binds the PSK to a particular key derivation function, TLS 1.2 does not.  This binding means that it is possible to use the same PSK in different hashes, leading to the potential for attacking the PSK by comparing the hash outputs.  While there are no known insecurities, these uses are not known to be secure, and should therefore be avoided.
 
-{{RFC9258}} adds a key derivation function to the import interface of (D)TLS 1.3, which binds the externally provided PSK to the protocol version.  In particular, that document:
+{{RFC9258}} adds a key derivation function (KDF) to the import interface of (D)TLS 1.3, which binds the externally provided PSK to the protocol version.  In particular, that document:
 
 > ... describes a mechanism for importing PSKs derived from external PSKs by including the target KDF, (D)TLS protocol version, and an optional context string to ensure uniqueness. This process yields a set of candidate PSKs, each of which are bound to a target KDF and protocol, that are separate from those used in (D)TLS 1.2 and prior versions. This expands what would normally have been a single PSK and identity into a set of PSKs and identities.
 
-An implementation MUST NOT use the same PSK for TLS 1.3 and for earlier versions of TLS.  This requirement prevents reuse of a PSK with multiple TLS versions, which prevents the attacks discussed in {{RFC8446, Section E.7}}.  The exact manner in which this requirement is enforced is implementation-specific.  One possibility is to have two different PSKs.  Another possibility is to forbid the use of TLS 1.3, or to forbid the use of TLS versions less than TLS 1.3.
+An implementation MUST NOT use the same PSK for TLS 1.3 and for earlier versions of TLS.  This requirement prevents reuse of a PSK with multiple TLS versions, which prevents the attacks discussed in {{RFC8446, Section E.7}}.  The exact manner in which this requirement is enforced is implementation-specific.  One possibility is to have two different PSKs.  Another possibility is to forbid the use of TLS versions less than TLS 1.3.
 
 It is RECOMMENDED that systems follow the directions of {{RFC9257, Section 6}} for the use of external PSKs in TLS.  That document provides extremely useful guidance on generating and using PSKs.
 
-Implementations MUST support PSKs of at least 32 octets in length, and SHOULD support PSKs of 64 octets or more.  As the PSKs are generally hashed before being used in TLS, the useful entropy of a PSK is limited by the size of the hash output.  This output may be 256, 384, or 512 bits in length.  Nevertheless, it is good practice for implementations to allow entry of PSKs of more than 64 octets, as the PSK may be in a form other than bare binary data.  Implementations which limit the PSK to a maximum of 64 octets are likely to use PSKs which have much less than 512 bits of entropy.  That is, a PSK with high entropy may be expanded via some construct (e.g. base32 as in the example below) in order to make it easier for people to interact with.  Where 512 bits of entropy are input to an encoding construct, the output may be larger than 64 octets.
-
-Implementations MUST require that PSKs be at least 16 octets in length, which SHOULD be derived from a source with at least 128 bits of entropy.  That is, short PSKs MUST NOT be permitted to be used, and PSKs MUST be random.   The strength of the PSK is not determined by the length of the PSK, but instead by the number of bits of entropy which it contains.  People are not good at creating data with high entropy, so a source of cryptographically secure random numbers MUST be used.
+Implementations MUST support PSKs of at least 32 octets in length, and SHOULD support PSKs of 64 octets or more.  As the PSKs are generally hashed before being used in TLS, the useful entropy of a PSK is limited by the size of the hash output.  This output may be 256, 384, or 512 bits in length.  Nevertheless, it is good practice for implementations to allow entry of PSKs of more than 64 octets, as the PSK may be in a form other than bare binary data.  Implementations which limit the PSK to a maximum of 64 octets are likely to use PSKs which have much less than 512 bits of entropy.  That is, a PSK with high entropy may be expanded via some construct (e.g., base32 as in the example below) in order to make it easier for people to interact with.  Where 512 bits of entropy are input to an encoding construct, the output may be larger than 64 octets.
 
 Administrators SHOULD use PSKs of at least 24 octets, generated using a source of cryptographically secure random numbers.  Implementers needing a secure random number generator should see {{RFC8937}} for for further guidance.  PSKs are not passwords, and administrators should not try to manually create PSKs.
+
+Implementations MUST require that PSKs be at least 16 octets in length.  That is, short PSKs MUST NOT be permitted to be used, and PSKs MUST be random.   The strength of the PSK is not determined by the length of the PSK, but instead by the number of bits of entropy which it contains.  People are not good at creating data with high entropy, so a source of cryptographically secure random numbers MUST be used.
 
 PSKs are in their purest form are opaque tokens, represented as an undistinguished series of octets.  Where PSKs are expected to be managed automatically by scripted methods, this format is acceptable.  However, in some cases it is necessary for administrators to share PSKs, in which case humanly readable formats may be useful.
 
@@ -201,29 +201,31 @@ We note that the PSK identity is a field created by the connecting client.  Sinc
 
 It is not safe to use a raw PSK Identity to look up a corresponding PSK.  The PSK may come from an untrusted source, and may contain invalid or malicious data.  For example, the identity may have incorrect UTF-8 format; or it may contain data which forms an injection attack for SQL, LDAP, REST or shell meta characters; or it may contain embedded NUL octets which are incompatible with APIs which expect NUL terminated strings.  The identity may also be up to 65535 octets long.
 
-As such, implementations MUST validate the identity prior to it being used as a lookup key.  When the identity is passed to an external API (e.g. database lookup), implementations MUST either escape any characters in the identity which are invalid for that API, or else reject the identity entirely.  The exact form of any escaping depends on the API, and we cannot document all possible methods here.  However, a few basic validation rules are suggested, as outlined below.  Any identity which is rejected by these validation rules SHOULD cause the server to close the TLS connection.
+As such, implementations MUST validate the identity prior to it being used as a lookup key.  When the identity is passed to an external API (e.g., database lookup), implementations MUST either escape any characters in the identity which are invalid for that API, or else reject the identity entirely.  The exact form of any escaping depends on the API, and we cannot document all possible methods here.  However, a few basic validation rules are suggested, as outlined below.  Any identity which is rejected by these validation rules MUST cause the server to close the TLS connection.
 
 The suggested validation rules for identities used outside of resumption are as follows:
 
-* Identities longer than a fixed maximum SHOULD be rejected.  The limit is implementation dependent, but SHOULD NOT be less than 128, and SHOULD NOT be more than 1024.
+* Identities longer than a fixed maximum SHOULD be rejected.  The limit is implementation dependent, but SHOULD NOT be less than 128, and SHOULD NOT be more than 1024.  There is no purpose to allowing extremely long identities, and allowing them does little more than complicate implementations.
 
-* Identities SHOULD be in UTF-8 format.  Identities with embedded control characters, NUL octets, etc. SHOULD NOT be used.
+* Identities SHOULD be in UTF-8 format.  Identities with embedded control characters, NUL octets, etc. SHOULD NOT be used.  This guidance is intended to both allow administators to recognize UTF-8 identities, and to allow implementations to more clearly distinguish TLS-PSK identities from TLS 1.3 resumption identities.  Allowing the two identifier spaces to overlap creates needless complexity and confusion.
 
-* Where the NAI format is expected, identities which are not in NAI format SHOULD be rejected
+* Where the NAI format is expected, identities which are not in NAI format SHOULD be rejected, unless they are TLS 1.3 session identifies.  This rule allows implementations to more easily filter out unexpected or bad identities, and to close inappropriate TLS connections.
 
 It is RECOMMENDED that implementations extend these rules with any additional validation which are found to be useful.  For example, implementations and/or deployments could both generate PSK identities in a particular format for passing to client systems, and then also verify that any received identity matches that format.  For example, a site could generate PSK identities which are composed of characters in the local language.  The site could then reject identities which contain characters from other languages, even if those characters are valid UTF-8.
+
+The purpose of these rules is to help administators and implementors more easily manage systems using TLS-PSK, while also minimizing complexity and protecting from potential attackers traffic.  The rules follow a principle of "discard bad traffic quickly", which helps to improve system stability and performance.
 
 ## PSK and PSK Identity Sharing
 
 While administrators may desire to share PSKs and/or PSK identities across multiple systems, such usage is NOT RECOMMENDED.  Details of the possible attacks on reused PSKs are given in {{RFC9257, Section 4.1}}.
 
-Implementations MUST be able to configure a unique PSK and PSK identity for each possible client-server relationship.  This configuration allows administrators desiring security to use unique PSKs for each such relationship.  This configuration also allows administrators to re-use PSKs and PSK Identities where local policies permit.
+Implementations MUST support the ability to configure a unique PSK and PSK identity for each possible client-server relationship.  This configuration allows administrators desiring security to use unique PSKs for each such relationship.  This configuration is also compatible with the practice of administrators who wish to re-use PSKs and PSK Identities where local policies permit.
 
 Implementations SHOULD warn administrators if the same PSK identity and/or PSK is used for multiple client-server relationships.
 
 # Guidance for RADIUS Clients
 
-Client implementations MUST allow the use of a pre-shared key (TLS-PSK) for RADIUS/TLS.  The client implementation can then expose a user interface flag which is "TLS yes / no", and then also fields which ask for the PSK identity and PSK itself.
+Client implementations MUST allow the use of a pre-shared key (PSK) for RADIUS/TLS.  The client implementation can then expose a user interface flag which is "TLS yes / no", and then also fields which ask for the PSK identity and PSK itself.
 
 For TLS 1.3, Implementations MUST support "psk_dhe_ke" Pre-Shared Key Exchange Mode in TLS 1.3 as discussed in {{RFC8446, Section 4.2.9}} and in {{RFC9257, Section 6}}.  Implementations MUST implement the recommended cipher suites in {{RFC9325, Section 4.2}} for TLS 1.2, and in {{RFC8446, Section 9.1}} for TLS 1.3.  In order to future-proof these recommendations, we give the following recommendations:
 
@@ -279,7 +281,7 @@ If a client system is compromised, its complete configuration is exposed to the 
 
 The benefits of TLS-PSK are in easing management and in administrative overhead, not in securing traffic from resourceful attackers.  Where TLS-PSK is used across the Internet, PSKs MUST contain at least 256 bits of entropy.
 
-For example, a RADIUS server could be configured to be accept connections from a source network of 192.0.2.0/24.  The server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
+For example, a RADIUS server could be configured to be accept connections from a source network of 192.0.2.0/24 or 2001:DB8::/32.  The server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
 
 RADIUS servers need to be able to limit certain PSK identifiers to certain network ranges or IP addresses.  That is, if a NAS is known to have a dynamic IP address within a particular subnet, the server should limit use of the NASes PSK to that subnet.  This filtering can therefore help to catch configuration errors.
 
@@ -295,7 +297,7 @@ A server supporting this specification MUST perform IP address filtering on inco
 
 A TLS-PSK server MUST be configurable with a set of "allowed" network ranges from which clients are permitted to connect.  Any connection from outside of the allowed range(s) MUST be rejected before any PSK identity is checked.  It is RECOMMENDED that servers support IP address filtering even when TLS-PSK is not used.
 
-The "allowed" network ranges could be implemented as a global list, or one or more network ranges could be tied to a client or clients.  The intent here is to allow connections to be filtered by source IP, and to allow clients to be limited to a subset of network addresses.  The exact method and representation of that filtering is up to an implementation.
+The "allowed" network ranges could be implemented as a global list, or one or more network ranges could be tied to a client or clients.  The intent here is to allow connections to be filtered by source IP address, and to allow clients to be limited to a subset of network addresses.  The exact method and representation of that filtering is up to an implementation.
 
 Conceptually, the set of IP addresses and ranges, along with permitted clients and their credentials forms a logical "client table" which the server uses to both filter and authenticate clients.  The client table should contain information such as allowed network ranges, PSK identity and associated PSK, credentials for another TLS authentication method, or flags which indicate that the server should require a client certificate.
 
@@ -311,7 +313,7 @@ Depending on the implementation, one or more clients may share a list of allowed
 
 ### PSK Authentication
 
-Once the source IP has been verified to be allowed for this particular client, the server authenticates the TLS connection via the PSK taken from the client definition.  If the PSK is verified, the server then accepts the connection, and proceeds with RADIUS/TLS as per {{RFC6614}}.
+Once the source IP address has been verified to be allowed for this particular client, the server authenticates the TLS connection via the PSK taken from the client definition.  If the PSK is verified, the server then accepts the connection, and proceeds with RADIUS/TLS as per {{RFC6614}}.
 
 If the PSK is not verified, then the server MUST close the connection.  While TLS provides for fallback to other authentication methods such as client certificates, there is no reason for a client to be configured simultaneously with multiple authentication methods.
 
@@ -348,6 +350,12 @@ We make no changes over {{RFC6614}} and {{RFC7360}}.
 # Security Considerations
 
 The primary focus of this document is addressing security considerations for RADIUS.
+
+XXX In addition, there are
+added security considerations listed in RFCs 8446, 9257, 9258 (and other RFCs)
+which might not have applied to Radius w/out the use of external PSKs.  It
+might make sense to call those out specifically.
+
 
 # IANA Considerations
 
