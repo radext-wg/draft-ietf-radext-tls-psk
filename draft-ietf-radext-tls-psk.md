@@ -119,8 +119,6 @@ We also incorporate by reference the requirements of {{RFC7360, Section 10.2}} w
 
 In order to guide Implementers, we give an example commands below which generates random PSKs.  While some commands may not work on some systems one of the commands should succeed.  The intent here is to document a concise and simple example of creating PSKs which are both secure, and humanly manageable.  This document does not mandate that the PSKs follow this format, or any other format.
 
-
-
 ~~~~
 openssl rand -base64 16
 
@@ -241,7 +239,7 @@ If a client initiated a connection using a PSK with TLS 1.3 by including the pre
 
 RADIUS systems implementing TLS-PSK MUST support identities as per {{RFC4279, Section 5.3}}, and MUST enable configuring TLS-PSK identities in management interfaces as per {{RFC4279, Section 5.4}}.
 
-The historic methods of signing RADIUS packets have not yet been cracked, but they are believed to be much less secure than modern TLS.  Therefore, when a RADIUS shared secret is used to sign RADIUS/UDP or RADIUS/TCP packets, that shared secret MUST NOT be used with TLS-PSK.  If the secrets were to be reused, then an attack on historic RADIUS cryptography could be trivially leveraged to decrypt TLS-PSK sessions.  Therefore in order to prevent confusion between shared secrets and TLS-PSKs, management interfaces and APIs need to label PSK fields as "PSK" or "TLS-PSK", rather than as "shared secret".
+The historic methods of signing RADIUS packets have not yet been broken, but they are believed to be much less secure than modern TLS.  Therefore, when a RADIUS shared secret is used to sign RADIUS/UDP or RADIUS/TCP packets, that shared secret MUST NOT be used with TLS-PSK.  If the secrets were to be reused, then an attack on historic RADIUS cryptography could be trivially leveraged to decrypt TLS-PSK sessions.  Therefore in order to prevent confusion between shared secrets and TLS-PSKs, management interfaces and APIs need to label PSK fields as "PSK" or "TLS-PSK", rather than as "shared secret".
 
 With TLS-PSK, RADIUS/TLS clients MUST permit the configuration of a RADIUS server IP address or host name, because dynamic server lookups {{RFC7585}} can only be used if servers use certificates.
 
