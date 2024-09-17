@@ -29,6 +29,7 @@ normative:
   RFC2865:
   RFC4279:
   RFC8174:
+  RFC8265:
   RFC9257:
   RFC9325:
 
@@ -47,7 +48,7 @@ venue:
 
 --- abstract
 
-This document gives implementation and operational considerations for using TLS-PSK with RADIUS/TLS (RFC6614) and RADIUS/DTLS (RFC7360).  The purpose of the document is to help smooth the operational transition from the use of the insecure RADIUS/UDP to the use of the much more secure RADIUS/TLS.
+This document provides implementation and operational considerations for using TLS-PSK with RADIUS/TLS (RFC6614) and RADIUS/DTLS (RFC7360).  The purpose of the document is to help smooth the operational transition from the use of the RADIUS/UDP to RADIUS/TLS.
 
 --- middle
 
@@ -57,9 +58,9 @@ The previous specifications "Transport Layer Security (TLS) Encryption for RADIU
 
 To clearly distinguish the various secrets and keys, this document uses "shared secret" to mean "RADIUS shared secret", and Pre-Shared Key (PSK) to mean secret keys which are used with TLS-PSK.
 
-The purpose of the document is to help smooth the operational transition from the use of the insecure RADIUS/UDP to the use of the much more secure RADIUS/TLS.  While we recognize that using PSKs is often less preferable to using public / private keys, the operational model of PSKs follows the legacy RADIUS "shared secret" model.  As such, it can be easier for implementers and operators to transition to TLS when that transition is offered as a series of small changes.
+The purpose of the document is to help smooth the operational transition from the use of the insecure RADIUS/UDP to the use of the much more secure RADIUS/TLS.  While using PSKs is often less preferable to using public / private keys, the operational model of PSKs follows the legacy RADIUS "shared secret" model.  As such, it can be easier for implementers and operators to transition to TLS when that transition is offered as a series of small changes.
 
-The intent for TLS-PSK is for it to be used in situations where there are a limited set of known clients.  This situation mirrors the use-case of shared secrets.  TLS-PSK is not suitable where servers are not previusly known, such as with client certificates, or with dynamic server lookups {{RFC7585}}.
+The intent for TLS-PSK is for it to be used in situations where there are a limited set of known clients.  This situation mirrors the use-case of shared secrets.  TLS-PSK is not suitable where servers are not previously known as with dynamic server lookups {{RFC7585}}.  TLS-PSK is not suitable where clients or client identities are not previously known, as with client certificates.
 
 TLS-PSKs have the same issue of symmetric information between client and server: both parties know the secret key.  A client could, in theory, pretend to be a server.  In contrast, certificates are asymmetric, where it is impossible for the parties to assume the others identity.  This symmetry in TLS-PSK is likely to cause limited security problems.  RADIUS has used shared secrets for thirty years, and this vulnerability has not been known to be exploited.  As such, we believe that this known issue is acceptable for TLS-PSK.
 
@@ -93,7 +94,11 @@ Before we define any RADIUS-specific use of PSKs, we must first review the curre
 
 The requirements in this section apply to both client and server implementations which use TLS-PSK.  Client-specific and server-specific issues are discussed in more detail later in this document.
 
-## Requirements on PSKs
+## Guidance for PSKs
+
+We first give requirements for creating and managing PSKs, followed by usability guidance, and then a discussion of RADIUS shared secrets and their interaction with PSKs.
+
+### PSK Requirements
 
 Reuse of a PSK in multiple versions of TLS (e.g., TLS 1.2 and TLS 1.3) is considered unsafe ({{RFC8446, Section E.7}}).  Where TLS 1.3 binds the PSK to a particular key derivation function, TLS 1.2 does not.  This binding means that it is possible to use the same PSK in different hashes, leading to the potential for attacking the PSK by comparing the hash outputs.  While there are no known insecurities, these uses are not known to be secure, and should therefore be avoided.
 
@@ -103,21 +108,25 @@ Reuse of a PSK in multiple versions of TLS (e.g., TLS 1.2 and TLS 1.3) is consid
 
 An implementation MUST NOT use the same PSK for TLS 1.3 and for earlier versions of TLS.  This requirement prevents reuse of a PSK with multiple TLS versions, which prevents the attacks discussed in {{RFC8446, Section E.7}}.  The exact manner in which this requirement is enforced is implementation-specific.  One possibility is to have two different PSKs.  Another possibility is to forbid the use of TLS versions less than TLS 1.3.
 
-It is RECOMMENDED that systems follow the directions of {{RFC9257, Section 6}} for the use of external PSKs in TLS.  That document provides extremely useful guidance on generating and using PSKs.
+Implementations MUST follow the directions of {{RFC9257, Section 6}} for the use of external PSKs in TLS.  That document provides extremely useful guidance on generating and using PSKs.
 
 Implementations MUST support PSKs of at least 32 octets in length, and SHOULD support PSKs of 64 octets or more.  As the PSKs are generally hashed before being used in TLS, the useful entropy of a PSK is limited by the size of the hash output.  This output may be 256, 384, or 512 bits in length.  Nevertheless, it is good practice for implementations to allow entry of PSKs of more than 64 octets, as the PSK may be in a form other than bare binary data.  Implementations which limit the PSK to a maximum of 64 octets are likely to use PSKs which have much less than 512 bits of entropy.  That is, a PSK with high entropy may be expanded via some construct (e.g., base32 as in the example below) in order to make it easier for people to interact with.  Where 512 bits of entropy are input to an encoding construct, the output may be larger than 64 octets.
 
-Administrators SHOULD use PSKs of at least 24 octets, generated using a source of cryptographically secure random numbers.  Implementers needing a secure random number generator should see {{RFC8937}} for for further guidance.  PSKs are not passwords, and administrators should not try to manually create PSKs.
-
 Implementations MUST require that PSKs be at least 16 octets in length.  That is, short PSKs MUST NOT be permitted to be used, and PSKs MUST be random.   The strength of the PSK is not determined by the length of the PSK, but instead by the number of bits of entropy which it contains.  People are not good at creating data with high entropy, so a source of cryptographically secure random numbers MUST be used.
-
-PSKs are in their purest form are opaque tokens, represented as an undistinguished series of octets.  Where PSKs are expected to be managed automatically by scripted methods, this format is acceptable.  However, in some cases it is necessary for administrators to share PSKs, in which case humanly readable formats may be useful.
 
 Where user passwords are generally intended to be remembered and entered by people on a regular basis,  PSKs are intended to be entered once, and then automatically saved in a system configuration.  As such, due to the limited entropy of passwords, they are not acceptable for use with TLS-PSK, and would only be acceptable for use with a password-authenticated key exchange (PAKE) TLS method {{?RFC8492}}.  Implementations MUST therefore support entry and storage of PSKs as undistinguished octets.
 
 We also incorporate by reference the requirements of {{RFC7360, Section 10.2}} when using PSKs.
 
-In order to guide Implementers, we give an example commands below which generates random PSKs.  While some commands may not work on some systems one of the commands should succeed.  The intent here is to document a concise and simple example of creating PSKs which are both secure, and humanly manageable.  This document does not mandate that the PSKs follow this format, or any other format.
+### Usability Guidance
+
+PSKs are in their purest form are opaque tokens, represented as an undistinguished series of octets.  Where PSKs are expected to be managed automatically by scripted methods, this format is acceptable.  However, in some cases it is necessary for administrators to share PSKs, in which case humanly readable formats may be useful.  Implementations SHOULD support entering PSKs as both binary data, and via a humanly readable form such as hex encoding.
+
+Implementations SHOULD use a humanly readable form of PKSs for interfaces which are intended to be used by people, and SHOULD allow for binary data to be entered via an application programming interface (API).  Implementations SHOULD also allow for PSKs to be displayed in the above-mentioned hex encoding, so that administrators can manually verify that a particular PSK is being used.
+
+When using PSKs, administrators SHOULD use PSKs of at least 24 octets, generated using a source of cryptographically secure random numbers.  Implementers needing a secure random number generator should see {{RFC8937}} for for further guidance.  PSKs are not passwords, and administrators should not try to manually create PSKs.
+
+In order to guide implementors and adminis, we give an example commands below which generates random PSKs.  While some commands may not work on some systems one of the commands should succeed.  The intent here is to document a concise and simple example of creating PSKs which are both secure, and humanly manageable.  This document does not mandate that the PSKs follow this format, or any other format.
 
 ~~~~
 openssl rand -base64 16
@@ -148,13 +157,13 @@ There may be use-cases for using one shared secret across multiple RADIUS client
 There are no known use-cases for using a PSK as a shared secret, or vice-versa.
 
 Implementations MUST reject configuration attempts that try to use the
-same value for PSK and shared secret.  To prevent administrative errors, implementations SHOULD NOT provide user interfaces which allow both PSKs and shared secrets to be entered at the same time.  There is too much of a temptation for administrators to enter the same value in both fields, which would violate the limitations given above.  Implementations MUST NOT use a "shared secret" field as a way for administrators to enter PSKs.  The PSK entry fields MUST be labeled as being related to PSKs, and not to shared secrets.
+same value for PSK and shared secret.  To prevent administrative errors, implementations MUST NOT NOT provide user interfaces which allow both PSKs and shared secrets to be entered at the same time.  There is too much of a temptation for administrators to enter the same value in both fields, which would violate the limitations given above.  Implementations MUST NOT use a "shared secret" field as a way for administrators to enter PSKs.  The PSK entry fields MUST be labeled as being related to PSKs, and not to shared secrets.
 
 ## PSK Identities
 
 {{RFC4279, Section 5.1}} requires that PSK identities be encoded in UTF-8 format.  However, {{RFC8446, Section 4.2.11}} describes the "Pre-Shared Key Extension" and defines the ticket as an opaque string: "opaque identity<1..2^16-1>;".  This PSK is then used in {{RFC8446, Section 4.6.1}} for resumption.
 
-These definitions appear to be in conflict.  This conflict is addressed in {{RFC9257, Section 6.1.1}}, which discusses requirements for encoding and comparison of PSK identities.  It is RECOMMENDED that systems follow the directions of {{RFC9257, Section 6.1.1}} when using PSK Identities for RADIUS/TLS.
+These definitions appear to be in conflict.  This conflict is addressed in {{RFC9257, Section 6.1.1}}, which discusses requirements for encoding and comparison of PSK identities.  Systems MUST follow the directions of {{RFC9257, Section 6.1.1}} when using or comparing PSK Identities for RADIUS/TLS.  mplementations MUST follow the recommendations of {{RFC8265}} for handling PSK Identity strings.
 
 In general, implementers should allow for external PSK identities to follow {{RFC4279}} and be UTF-8, while PSK identities provisioned as part of resumption are automatically provisioned, and therefore follow {{RFC8446}}.
 
@@ -162,7 +171,9 @@ Note that the PSK identity is sent in the clear, and is therefore visible to att
 
 Implementations MUST support PSK Identities of 128 octets, and SHOULD support longer PSK identities.  We note that while TLS provides for PSK identities of up to 2^16-1 octets in length, there are few practical uses for extremely long PSK identities.
 
-It is up to administrators and implementations as to how they differentiate external PSK identities from session resumption PSK identities used in TLS 1.3 session tickets.  One approach could be to have externally provisioned PSK identities contain an NAI such as described above, while session resumption PSK identities contain large blobs of opaque, encrypted, and authenticated text.  It should then be relatively straightforward to differentiate the two types of identities.  One is UTF-8, the other is not.  One is not authenticated, the other is authenticated.
+It is up to administrators and implementations as to how they differentiate external PSK identities from session resumption PSK identities used in TLS 1.3 session tickets.  While {{RFC9257, Section 6.1.2}} suggests the identities should be unique, it offers no concrete steps for how this differentiation may be done.
+
+One approach could be to have externally provisioned PSK identities contain an NAI such as described above, while session resumption PSK identities contain large blobs of opaque, encrypted, and authenticated text.  It should then be relatively straightforward to differentiate the two types of identities.  One is UTF-8, the other is not.  One is unauthenticated, the other is authenticated.
 
 Servers MUST assign and/or track session resumption PSK identities in a
 way which facilities the ability to distinguish those identities from
@@ -223,6 +234,18 @@ Implementations MUST support the ability to configure a unique PSK and PSK ident
 
 Implementations SHOULD warn administrators if the same PSK identity and/or PSK is used for multiple client-server relationships.
 
+## PSK Lifetimes
+
+Unfortunately, {{RFC9257}} offers no guidance on PSK lifetiems other than to note Section 4.2 that:
+
+> Forward security may be achieved by using a PSK-DH mode or by using PSKs with short lifetimes.
+
+It is RECOMMENDED that PSKs be rotated regularly.  We offer no additional guidance on how often this process should occur.  Changing PSKs has a non-zero cost.  It is therefore up to administrators to determine how best to balance the cost of changing the PSK against the cost of a potential PSK compromise.
+
+As the PSKs are looked up by identity, the PSK Identity MUST also be changed when the PSK changes.
+
+Servers SHOULD track when a connection was last received for a particular PSK Identity, and SHOULD automatically invalidate credentials when a client has not connected for an extended period of time.  This process helps to mitigate the issue of credentials being leaked when a device is stolen or discarded.
+
 # Guidance for RADIUS Clients
 
 Client implementations MUST allow the use of a pre-shared key (PSK) for RADIUS/TLS.  The client implementation can then expose a user interface flag which is "TLS yes / no", and then also fields which ask for the PSK identity and PSK itself.
@@ -237,13 +260,21 @@ If a client initiated a connection using a PSK with TLS 1.3 by including the pre
 
 ## PSK Identities
 
+This section offers advice on both requirements for PSK identities, and on usability.
+
+### PSK Identity Requirements
+
 {{RFC6614}} is silent on the subject of PSK identities, which is an issue that we correct here.  Guidance is required on the use of PSK identities, as the need to manage identities associated with PSK is a new requirement for NAS management interfaces, and is a new requirement for RADIUS servers.
 
 RADIUS systems implementing TLS-PSK MUST support identities as per {{RFC4279, Section 5.3}}, and MUST enable configuring TLS-PSK identities in management interfaces as per {{RFC4279, Section 5.4}}.
 
-The historic methods of signing RADIUS packets have not yet been broken, but they are believed to be much less secure than modern TLS.  Therefore, when a RADIUS shared secret is used to sign RADIUS/UDP or RADIUS/TCP packets, that shared secret MUST NOT be used with TLS-PSK.  If the secrets were to be reused, then an attack on historic RADIUS cryptography could be trivially leveraged to decrypt TLS-PSK sessions.  Therefore in order to prevent confusion between shared secrets and TLS-PSKs, management interfaces and APIs need to label PSK fields as "PSK" or "TLS-PSK", rather than as "shared secret".
+The historic methods of signing RADIUS packets have not yet been broken, but they are believed to be much less secure than modern TLS.  Therefore, when a RADIUS shared secret is used to sign RADIUS/UDP or RADIUS/TCP packets, that shared secret MUST NOT be used with TLS-PSK.  If the secrets were to be reused, then an attack on historic RADIUS cryptography could be trivially leveraged to decrypt TLS-PSK sessions.
 
 With TLS-PSK, RADIUS/TLS clients MUST permit the configuration of a RADIUS server IP address or host name, because dynamic server lookups {{RFC7585}} can only be used if servers use certificates.
+
+### Usability Guidance
+
+In order to prevent confusion between shared secrets and TLS-PSKs, management interfaces and APIs need to label PSK fields as "PSK" or "TLS-PSK", rather than as "shared secret".
 
 # Guidance for RADIUS Servers
 
