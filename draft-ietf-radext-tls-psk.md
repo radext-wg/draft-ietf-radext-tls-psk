@@ -62,7 +62,7 @@ The purpose of the document is to help smooth the operational transition from th
 
 The intent for TLS-PSK is for it to be used in situations where there are a limited set of known clients.  This situation mirrors the use-case of shared secrets.  TLS-PSK is not suitable where servers are not previously known as with dynamic server lookups {{RFC7585}}.  TLS-PSK is not suitable where clients or client identities are not previously known, as with client certificates.
 
-TLS-PSKs have the same issue of symmetric information between client and server: both parties know the secret key.  A client could, in theory, pretend to be a server.  In contrast, certificates are asymmetric, where it is impossible for the parties to assume the others identity.  This symmetry in TLS-PSK is likely to cause limited security problems.  RADIUS has used shared secrets for thirty years, and this vulnerability has not been known to be exploited.  As such, we believe that this known issue is acceptable for TLS-PSK.
+TLS-PSKs have the same issue of symmetric information between client and server: both parties know the secret key.  A client could, in theory, pretend to be a server.  In contrast, certificates are asymmetric, where it is impossible for the parties to assume the others identity.  Further discussion of this topic is contained in []{#sharing}.
 
 Unless it is explicitly called out that a recommendation applies to
 TLS alone or to DTLS alone, each recommendation applies to both TLS
@@ -226,7 +226,7 @@ It is RECOMMENDED that implementations extend these rules with any additional va
 
 The purpose of these rules is to help administators and implementors more easily manage systems using TLS-PSK, while also minimizing complexity and protecting from potential attackers traffic.  The rules follow a principle of "discard bad traffic quickly", which helps to improve system stability and performance.
 
-## PSK and PSK Identity Sharing
+## PSK and PSK Identity Sharing {#sharing}
 
 While administrators may desire to share PSKs and/or PSK identities across multiple systems, such usage is NOT RECOMMENDED.  Details of the possible attacks on reused PSKs are given in {{RFC9257, Section 4.1}}.
 
