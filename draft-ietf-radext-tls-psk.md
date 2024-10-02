@@ -60,9 +60,9 @@ To clearly distinguish the various secrets and keys, this document uses "shared 
 
 The purpose of the document is to help smooth the operational transition from the use of the insecure RADIUS/UDP to the use of the much more secure RADIUS/TLS.  While using PSKs is often less preferable to using public / private keys, the operational model of PSKs follows the legacy RADIUS "shared secret" model.  As such, it can be easier for implementers and operators to transition to TLS when that transition is offered as a series of small changes.
 
-The intent for TLS-PSK is for it to be used in situations where there are a limited set of known clients.  This situation mirrors the use-case of shared secrets.  TLS-PSK is not suitable where servers are not previously known as with dynamic server lookups {{RFC7585}}.  TLS-PSK is not suitable where clients or client identities are not previously known, as with client certificates.
+The intent for TLS-PSK is to be used in networks where the addresses of client and server are known, as with RADIUS/UDP.  This situation is similar to the use-case of RADIUS/UDP with shared secrets.  TLS-PSK is not suitable for situations where clients dynamically discover servers, as there is no way for the client to dynamically determine which PSK should be used with a new server (or vice versa).   In contrast, [RFC7585] dynamic discovery allows for a client or server to authenticate previously unknown server or client, as the parties can be issued a certificate by a known Certification Authority (CA).
 
-TLS-PSKs have the same issue of symmetric information between client and server: both parties know the secret key.  A client could, in theory, pretend to be a server.  In contrast, certificates are asymmetric, where it is impossible for the parties to assume the others identity.  Further discussion of this topic is contained in []{#sharing}.
+TLS-PSKs have the same issue of symmetric information between client and server: both parties know the secret key.  A client could, in theory, pretend to be a server.  In contrast, certificates are asymmetric, where it is impossible for the parties to assume the others identity.  Further discussion of this topic is contained in []{#sharing}.2
 
 Unless it is explicitly called out that a recommendation applies to
 TLS alone or to DTLS alone, each recommendation applies to both TLS
@@ -88,6 +88,10 @@ For example, unlike shared secrets, certificates expire.  This expiration means 
 
 Certificates also require the use of certification authorities (CAs), and chains of certificates.  RADIUS implementations using TLS therefore have to track not just a small shared secret, but also potentially many large certificates.  The use of TLS-PSK can therefore provide a simpler upgrade path for implementations to transition from RADIUS shared secrets to TLS.
 
+In terms of ongoing maintenance, it is generally simpler to maintain servers than clients.  For one, there are many fewer servers than clients.  Servers are also typically less resource constrained, and often run on general-purpose operating systems, where maintenance can be automated using widely-available tools.
+
+In contrast, clients are often numerous, resource constrained, and are more likely to be closed or proprietary systems with limited interfaces.  As a result, it can be difficult to update these clients when a root CA expires.  The use of TLS-PSK in such an environment may therefore offer management efficiencies.
+
 # General Discussion of PSKs and PSK Identities
 
 Before we define any RADIUS-specific use of PSKs, we must first review the current standards for PSKs, and give general advice on PSKs and PSK identities.
@@ -102,7 +106,9 @@ We first give requirements for creating and managing PSKs, followed by usability
 
 Reuse of a PSK in multiple versions of TLS (e.g., TLS 1.2 and TLS 1.3) is considered unsafe ({{RFC8446, Section E.7}}).  Where TLS 1.3 binds the PSK to a particular key derivation function, TLS 1.2 does not.  This binding means that it is possible to use the same PSK in different hashes, leading to the potential for attacking the PSK by comparing the hash outputs.  While there are no known insecurities, these uses are not known to be secure, and should therefore be avoided.
 
-{{RFC9258}} adds a key derivation function (KDF) to the import interface of (D)TLS 1.3, which binds the externally provided PSK to the protocol version.  In particular, that document:
+It may be tempting for servers to implement a "trust on first use" (TOFU) policy with respect to clients.  Such behavior is NOT RECOMMENDED.  When servers receive a connection from an unknown client, they SHOULD log the PSK identity, source IP address, and any other information which may be relevant.  An administrator can then later look at the logs and determine the appropriate action to take.
+
+{{RFC9258}} adds a key derivation function (KDF) to the import interface of (D)TLS 1.3, which binds the externally provided PSK to the protocol version.  That process is preferred to any TOFU mechanism.  In particular, that document:
 
 > ... describes a mechanism for importing PSKs derived from external PSKs by including the target KDF, (D)TLS protocol version, and an optional context string to ensure uniqueness. This process yields a set of candidate PSKs, each of which are bound to a target KDF and protocol, that are separate from those used in (D)TLS 1.2 and prior versions. This expands what would normally have been a single PSK and identity into a set of PSKs and identities.
 
@@ -242,6 +248,8 @@ Unfortunately, {{RFC9257}} offers no guidance on PSK lifetiems other than to not
 
 It is RECOMMENDED that PSKs be rotated regularly.  We offer no additional guidance on how often this process should occur.  Changing PSKs has a non-zero cost.  It is therefore up to administrators to determine how best to balance the cost of changing the PSK against the cost of a potential PSK compromise.
 
+TLS-PSK MUST use modes such as PSK-DH or ECDHE_PSK {{?RFC5489}} which provide forward secrecy.  Failure to use such modes would mean that compromise of a PSK would allow an attacker to decrypt all sessions which had used that PSK.
+
 As the PSKs are looked up by identity, the PSK Identity MUST also be changed when the PSK changes.
 
 Servers SHOULD track when a connection was last received for a particular PSK Identity, and SHOULD automatically invalidate credentials when a client has not connected for an extended period of time.  This process helps to mitigate the issue of credentials being leaked when a device is stolen or discarded.
@@ -306,21 +314,13 @@ We define practices for TLS-PSK by analogy with the RADIUS/UDP use-case, and by 
 
 In order to securely support dynamic source IP addresses for clients, we also require that servers limit clients based on a network range.  The alternative would be to suggest that RADIUS servers allow any source IP address to connect and try TLS-PSK, which could be a security risk.  When RADIUS servers do no source IP address filtering, it is easier for attackers to send malicious traffic to the server.  An issue with a TLS library or even a TCP/IP stack could permit the attacker to gain unwarranted access.  In contrast, when IP address filtering is done, attackers generally must first gain access to a secure network before attacking the RADIUS server.
 
-Even where {{RFC7585}} dynamic discovery is not used, servers SHOULD NOT permit TLS-PSK to be used across the wider Internet.  The intent for TLS-PSK is for it to be used in internal / secured networks, where clients come from a small number of known locations.  In contrast, certificates can be generated and assigned to clients without any interaction with the RADIUS server.  Therefore if the RADIUS server needs to accept connections from clients at unknown locations, a more secure method is to use client certificates.
+Even where [RFC7585] dynamic discovery is not used, the use of TLS-PSK across unrelated organizations requires that those organizations share PSKs.  Such sharing makes it easier for a client to impersonate a server, and vice versa.  In contrast, when certificates are used, such impersonations are impossible. It is therefore NOT RECOMMENDED to use TLS-PSK across organizational boundaries.
+
+When TLS-PSK is used in an environment where both client and server are part of the same organization, then impersonations only affect that organization.  As TLS offers significant advantages over RADIUS/UDP, it is RECOMMENDED that organizations use RADIUS/TLS with TLS-PSK to replace RADIUS/UDP for all systems managed within the same organization.  While such systems are generally located inside of private networks, there are no known security issues with using TLS-PSK for RADIUS/TLS connections across the public Internet.
 
 If a client system is compromised, its complete configuration is exposed to the attacker.  Exposing a client certificate means that the attacker can pretend to be the client.  In contrast, exposing a PSK means that the attacker can not only pretend to be the client, but can also pretend to be the server.
 
-The benefits of TLS-PSK are in easing management and in administrative overhead, not in securing traffic from resourceful attackers.  Where TLS-PSK is used across the Internet, PSKs MUST contain at least 256 bits of entropy.
-
-For example, a RADIUS server could be configured to be accept connections from a source network of 192.0.2.0/24 or 2001:DB8::/32.  The server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
-
-RADIUS servers need to be able to limit certain PSK identifiers to certain network ranges or IP addresses.  That is, if a NAS is known to have a dynamic IP address within a particular subnet, the server should limit use of the NASes PSK to that subnet.  This filtering can therefore help to catch configuration errors.
-
-As some clients may have dynamic IP addresses, it is possible for a one PSK identity to appear at different source IP addresses over time.  In addition, as there may be many clients behind one NAT gateway, there may be multiple RADIUS clients using one public IP address.  RADIUS servers need to support multiple PSK identifiers at one source IP address.
-
-That is, a server needs to support multiple different clients within one network range, multiple clients behind a NAT, and one client having different IP addresses over time.  All of those use-cases are common and necessary.
-
-The following section describes these requirements in more detail.
+The main benefit of TLS-PSK, therefore, is that its operational processes are similar to that used for managing RADIUS/UDP, while gaining the increased security of TLS.   However, it is still beneficialy for servers to perform IP address filtering, in order to further limit their exposure to attacks.
 
 ### IP Filtering
 
@@ -341,6 +341,14 @@ Where the server does not receive TLS-PSK from the client, it proceeds with anot
 An implementation may perform two independent IP address lookups.  First, to check if the connection allowed at all, and second to check if the connection is authorized for this particular client.  One or both checks may be used by a particular implementation.  The two sets of IP addresses can overlap, and implementations SHOULD support that capability.
 
 Depending on the implementation, one or more clients may share a list of allowed network ranges.  Alternately, the allowed network ranges for two clients can overlap only partially, or not at all.  All of these possibilities MUST be supported by the server implementation.
+
+For example, a RADIUS server could be configured to be accept connections from a source network of 192.0.2.0/24 or 2001:DB8::/32.  The server could therefore discard any TLS connection request which comes from a source IP address outside of that network.  In that case, there is no need to examine the PSK identity or to find the client definition.  Instead, the IP source filtering policy would deny the connection before any TLS communication had been performed.
+
+As some clients may have dynamic IP addresses, it is possible for a one PSK identity to appear at different source IP addresses over time.  In addition, as there may be many clients behind one NAT gateway, there may be multiple RADIUS clients using one public IP address.  RADIUS servers MUST support multiple PSK identifiers at one source IP address.
+
+That is, a server needs to support multiple different clients within one network range, multiple clients behind a NAT, and one client having different IP addresses over time.  All of those use-cases are common and necessary.
+
+The following section describes these requirements in more detail.
 
 ### PSK Authentication
 
@@ -386,6 +394,10 @@ XXX In addition, there are
 added security considerations listed in RFCs 8446, 9257, 9258 (and other RFCs)
 which might not have applied to Radius w/out the use of external PSKs.  It
 might make sense to call those out specifically.
+
+Using TLS-PSK across the wider Internet for RADIUS can have different security considerations than for other protocols.  For example, if TLS-PSK was for client/server communication with HTTPS, then having a PSK be exposed or broken could affect one users traffic.  In contrast, RADIUS contains credentials and personally identifiable information (PII) for many users.  As a result, an attacker being able to see inside of a TLS-PSK connection for RADIUS would result in substantial amounts of PII being leaked, possibly including passwords.
+
+When modes providing forward secrecy are used (e.g. ECDHE_PSK {{?RFC5489}} and {{?RFC8442}}), such attacks are limited to future sessions, and historical sessions are still secure.
 
 
 # IANA Considerations
