@@ -362,7 +362,7 @@ That is, client configuration is relatively simple: use a particular set of cred
 
 ### Resumption
 
-Implementations SHOULD support resumption.  In many cases session tickets can be authenticated solely by the server, and do not require querying a database.  The use of resumption can allow the system to better scale to higher loads.  There will also be systems which support both TLS-PSK and other TLS-based authentication methods such as certificates.  It is therefore vital for servers to be able to distinguish the use-case of TLS-PSK with pre-configured identities from TLS-PSK which is being used for resumptions.
+In the context of TLS-PSK, there is little use for doing session resumption since TLS-PSK already uses a minimal handshake. Therefore it is NOT RECOMMENDED to enable session resumption for TLS-PSK connections. However there will also be systems which support both TLS-PSK and other TLS-based authentication methods such as certificates as well as session resumption.  It is therefore vital for servers to be able to distinguish the use-case of TLS-PSK with pre-configured identities from TLS-PSK which is being used for resumptions.
 
 The above discussion of PSK identities is therefore complicated by the use of PSKs for resumption in TLS 1.3.  A server which receives a PSK identity via TLS typically cannot query the TLS layer to see if this identity is for a resumed session (which is possibly for another TLS authentication method), or is instead a static pre-provisioned identity.  This confusion complicates server implementations.
 
@@ -376,7 +376,7 @@ Systems supporting TLS-PSK and resumption MUST cache data during the initial ful
 
 Information from the original TLS exchange (e.g., the original PSK identity) as well as related information (e.g., source IP addresses) may change between the initial full handshake and resumption. This change creates a "time-of-check time-of-use" (TOCTOU) security vulnerability. A malicious or compromised client could supply one set of data during the initial authentication, and a different set of data during resumption, potentially allowing them to obtain access that they should not have.
 
-If any authorization or policy decisions were made with information that has changed between the initial full handshake and resumption, and if change may lead to a different decision, such decisions MUST be reevaluated. It is RECOMMENDED that authorization and policy decisions are reevaluated based on the information given in the resumption. TLS-PSK servers MAY reject resumption where the information supplied during resumption does not match the information supplied during the original authentication. If a safe decision is not possible, TLS-PSK servers SHOULD reject the resumption and continue with a full handshake.
+If any authorization or policy decisions were made with information that has changed between the initial full handshake and resumption, and if change may lead to a different decision, such decisions MUST be reevaluated. It is RECOMMENDED that authorization and policy decisions are reevaluated based on the information given in the resumption. Servers MAY reject resumption where the information supplied during resumption does not match the information supplied during the original authentication. If a safe decision is not possible, servers SHOULD reject the resumption and continue with a full handshake.
 
 ### Interaction with other TLS authentication methods
 
