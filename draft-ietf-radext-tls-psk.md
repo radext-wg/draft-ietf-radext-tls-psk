@@ -288,7 +288,7 @@ In order to prevent confusion between shared secrets and TLS-PSKs, management in
 
 In order to support clients with TLS-PSK, server implementations MUST allow the use of a pre-shared key (TLS-PSK) for RADIUS/TLS.
 
-Systems which act as both client and server at the same time MUST NOT share or reuse PSK identities between incoming and outgoing connections.  Doing so would open up the systems to attack, as discussed in {{RFC9257, Section 4.1}}.
+Systems which act as both client and server at the same time MUST NOT share or reuse PSK identities between incoming and outgoing connections.  Doing so would open up the systems to attack, as discussed in {{RFC9257, Section 4.1}}. As an alternative, implementations MAY choose other methods to prevent connections to itself, e.g. by comparing client random in the TLS ClientHello.
 
 For TLS 1.3, Implementations MUST support "psk_dhe_ke" Pre-Shared Key Exchange Mode in TLS 1.3 as discussed in {{RFC8446, Section 4.2.9}} and in {{RFC9257, Section 6}}.  Implementations MUST implement the recommended cipher suites in {{RFC9325, Section 4.2}} for TLS 1.2, and in {{RFC8446, Section 9.1}} for TLS 1.3.  In order to future-proof these recommendations, we give the following recommendations:
 
