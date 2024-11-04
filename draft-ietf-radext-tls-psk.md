@@ -44,7 +44,7 @@ informative:
 venue:
   group: RADEXT
   mail: radext@ietf.org
-  github: freeradius/radext-tls-psk.git
+  github: radext-wg/draft-ietf-radext-tls-psk.git
 
 --- abstract
 
@@ -104,17 +104,31 @@ We first give requirements for creating and managing PSKs, followed by usability
 
 ### PSK Requirements
 
-Reuse of a PSK in multiple versions of TLS (e.g., TLS 1.2 and TLS 1.3) is considered unsafe ({{RFC8446, Section E.7}}).  Where TLS 1.3 binds the PSK to a particular key derivation function, TLS 1.2 does not.  This binding means that it is possible to use the same PSK in different hashes, leading to the potential for attacking the PSK by comparing the hash outputs.  While there are no known insecurities, these uses are not known to be secure, and should therefore be avoided.
+Reuse of a PSK in multiple versions of TLS (e.g., TLS 1.2 and TLS 1.3) is considered unsafe ({{RFC8446, Section E.7}}).  Where TLS 1.3 binds the PSK to a particular key derivation function, TLS 1.2 does not.  This binding means that it is possible to use the same PSK in different hashes, leading to the potential for attacking the PSK by comparing the hash outputs.  While there are no known insecurities, these uses are not known to be secure, and should therefore be avoided.  For this reason, an implementation MUST NOT use the same PSK for TLS 1.3 and for earlier versions of TLS.  The exact manner in which this requirement is enforced is implementation-specific.  One possibility is to have two different PSKs.  Another possibility is to forbid the use of TLS versions less than TLS 1.3.
 
-It may be tempting for servers to implement a "trust on first use" (TOFU) policy with respect to clients.  Such behavior is NOT RECOMMENDED.  When servers receive a connection from an unknown client, they SHOULD log the PSK identity, source IP address, and any other information which may be relevant.  An administrator can then later look at the logs and determine the appropriate action to take.
-
-{{RFC9258}} adds a key derivation function (KDF) to the import interface of (D)TLS 1.3, which binds the externally provided PSK to the protocol version.  That process is preferred to any TOFU mechanism.  In particular, that document:
+{{RFC9258}} adds a key derivation function (KDF) to the import interface of (D)TLS 1.3, which binds the externally provided PSK to the protocol version.  In particular, that document:
 
 > ... describes a mechanism for importing PSKs derived from external PSKs by including the target KDF, (D)TLS protocol version, and an optional context string to ensure uniqueness. This process yields a set of candidate PSKs, each of which are bound to a target KDF and protocol, that are separate from those used in (D)TLS 1.2 and prior versions. This expands what would normally have been a single PSK and identity into a set of PSKs and identities.
 
-An implementation MUST NOT use the same PSK for TLS 1.3 and for earlier versions of TLS.  This requirement prevents reuse of a PSK with multiple TLS versions, which prevents the attacks discussed in {{RFC8446, Section E.7}}.  The exact manner in which this requirement is enforced is implementation-specific.  One possibility is to have two different PSKs.  Another possibility is to forbid the use of TLS versions less than TLS 1.3.
+TODO: better wording to deal with forwards and backwards compatibility (how to phase out direct PSK importing if a deployment wishes to move to only use RFC9258)
 
-Implementations MUST follow the directions of {{RFC9257, Section 6}} for the use of external PSKs in TLS.  That document provides extremely useful guidance on generating and using PSKs.
+Implementations MAY import the external PSK in its raw form directly whilst they SHOULD also use the process described in {{RFC9258}}.
+
+Where an implementation chooses to use {{RFC9258}}, it MUST use the following value for `ImportedIdentity.context`:
+
+TODO: feedback to make this less awful
+
+~~~~
+
+    context = "tls-psk@changeme-do-we-need-a-leading-version-byte?.ietf.org" | 0x00 | [zero or more bytes of nonce] | [single octet providing length of context inclusive of its-self]
+
+~~~~
+
+Of note, the length component is required so that an implementation may separate `ImportedIdentity.external_identity` and `ImportedIdentity.context`.
+
+{{RFC9258}} describes an optimization of pre-computing all possible values of `ipskx` for each supported cipher. Where an implementation wishes to utilize this, then the `nonce` component of `ImportedIdentity.context` would be omitted. For implementations looking for a mechanism to prevent connections to itself, then `nonce` could be provided here.
+
+Implementations MUST follow the directions of {{RFC9257, Section 6}} for the use of external PSKs in TLS.  That document provides extremely useful guidance on generating and using PSKs. Adding to that, at the time of writing, only GnuTLS supports {{RFC9258}}.
 
 Implementations MUST support PSKs of at least 32 octets in length, and SHOULD support PSKs of 64 octets or more.  As the PSKs are generally hashed before being used in TLS, the useful entropy of a PSK is limited by the size of the hash output.  This output may be 256, 384, or 512 bits in length.  Nevertheless, it is good practice for implementations to allow entry of PSKs of more than 64 octets, as the PSK may be in a form other than bare binary data.  Implementations which limit the PSK to a maximum of 64 octets are likely to use PSKs which have much less than 512 bits of entropy.  That is, a PSK with high entropy may be expanded via some construct (e.g., base32 as in the example below) in order to make it easier for people to interact with.  Where 512 bits of entropy are input to an encoding construct, the output may be larger than 64 octets.
 
@@ -124,6 +138,8 @@ Where user passwords are generally intended to be remembered and entered by peop
 
 We also incorporate by reference the requirements of {{RFC7360, Section 10.2}} when using PSKs.
 
+It may be tempting for servers to implement a "trust on first use" (TOFU) policy with respect to clients.  Such behavior is NOT RECOMMENDED.  When servers receive a connection from an unknown client, they SHOULD log the PSK identity, source IP address, and any other information which may be relevant.  An administrator can then later look at the logs and determine the appropriate action to take.
+
 ### Usability Guidance
 
 PSKs are in their purest form are opaque tokens, represented as an undistinguished series of octets.  Where PSKs are expected to be managed automatically by scripted methods, this format is acceptable.  However, in some cases it is necessary for administrators to share PSKs, in which case humanly readable formats may be useful.  Implementations SHOULD support entering PSKs as both binary data, and via a humanly readable form such as hex encoding.
@@ -132,7 +148,7 @@ Implementations SHOULD use a humanly readable form of PKSs for interfaces which 
 
 When using PSKs, administrators SHOULD use PSKs of at least 24 octets, generated using a source of cryptographically secure random numbers.  Implementers needing a secure random number generator should see {{RFC8937}} for for further guidance.  PSKs are not passwords, and administrators should not try to manually create PSKs.
 
-In order to guide implementors and adminis, we give an example commands below which generates random PSKs.  While some commands may not work on some systems one of the commands should succeed.  The intent here is to document a concise and simple example of creating PSKs which are both secure, and humanly manageable.  This document does not mandate that the PSKs follow this format, or any other format.
+In order to guide implementers and administrators, we give an example commands below which generates random PSKs.  While some commands may not work on some systems one of the commands should succeed.  The intent here is to document a concise and simple example of creating PSKs which are both secure, and humanly manageable.  This document does not mandate that the PSKs follow this format, or any other format.
 
 ~~~~
 openssl rand -base64 16
@@ -169,7 +185,7 @@ same value for PSK and shared secret.  To prevent administrative errors, impleme
 
 {{RFC4279, Section 5.1}} requires that PSK identities be encoded in UTF-8 format.  However, {{RFC8446, Section 4.2.11}} describes the "Pre-Shared Key Extension" and defines the ticket as an opaque string: "opaque identity<1..2^16-1>;".  This PSK is then used in {{RFC8446, Section 4.6.1}} for resumption.
 
-These definitions appear to be in conflict.  This conflict is addressed in {{RFC9257, Section 6.1.1}}, which discusses requirements for encoding and comparison of PSK identities.  Systems MUST follow the directions of {{RFC9257, Section 6.1.1}} when using or comparing PSK Identities for RADIUS/TLS.  mplementations MUST follow the recommendations of {{RFC8265}} for handling PSK Identity strings.
+These definitions appear to be in conflict.  This conflict is addressed in {{RFC9257, Section 6.1.1}}, which discusses requirements for encoding and comparison of PSK identities.  Systems MUST follow the directions of {{RFC9257, Section 6.1.1}} when using or comparing PSK Identities for RADIUS/TLS.  Implementations MUST follow the recommendations of {{RFC8265}} for handling PSK Identity strings.
 
 In general, implementers should allow for external PSK identities to follow {{RFC4279}} and be UTF-8, while PSK identities provisioned as part of resumption are automatically provisioned, and therefore follow {{RFC8446}}.
 
@@ -224,13 +240,13 @@ The suggested validation rules for identities used outside of resumption are as 
 
 * Identities longer than a fixed maximum SHOULD be rejected.  The limit is implementation dependent, but SHOULD NOT be less than 128, and SHOULD NOT be more than 1024.  There is no purpose to allowing extremely long identities, and allowing them does little more than complicate implementations.
 
-* Identities SHOULD be in UTF-8 format.  Identities with embedded control characters, NUL octets, etc. SHOULD NOT be used.  This guidance is intended to both allow administators to recognize UTF-8 identities, and to allow implementations to more clearly distinguish TLS-PSK identities from TLS 1.3 resumption identities.  Allowing the two identifier spaces to overlap creates needless complexity and confusion.
+* Identities SHOULD be in UTF-8 format.  Identities with embedded control characters, NUL octets, etc. SHOULD NOT be used.  This guidance is intended to both allow administrators to recognize UTF-8 identities, and to allow implementations to more clearly distinguish TLS-PSK identities from TLS 1.3 resumption identities.  Allowing the two identifier spaces to overlap creates needless complexity and confusion.
 
 * Where the NAI format is expected, identities which are not in NAI format SHOULD be rejected, unless they are TLS 1.3 session identifies.  This rule allows implementations to more easily filter out unexpected or bad identities, and to close inappropriate TLS connections.
 
 It is RECOMMENDED that implementations extend these rules with any additional validation which are found to be useful.  For example, implementations and/or deployments could both generate PSK identities in a particular format for passing to client systems, and then also verify that any received identity matches that format.  For example, a site could generate PSK identities which are composed of characters in the local language.  The site could then reject identities which contain characters from other languages, even if those characters are valid UTF-8.
 
-The purpose of these rules is to help administators and implementors more easily manage systems using TLS-PSK, while also minimizing complexity and protecting from potential attackers traffic.  The rules follow a principle of "discard bad traffic quickly", which helps to improve system stability and performance.
+The purpose of these rules is to help administrators and implementers more easily manage systems using TLS-PSK, while also minimizing complexity and protecting from potential attackers traffic.  The rules follow a principle of "discard bad traffic quickly", which helps to improve system stability and performance.
 
 ## PSK and PSK Identity Sharing {#sharing}
 
@@ -242,7 +258,7 @@ Implementations SHOULD warn administrators if the same PSK identity and/or PSK i
 
 ## PSK Lifetimes
 
-Unfortunately, {{RFC9257}} offers no guidance on PSK lifetiems other than to note Section 4.2 that:
+Unfortunately, {{RFC9257}} offers no guidance on PSK lifetimes other than to note Section 4.2 that:
 
 > Forward security may be achieved by using a PSK-DH mode or by using PSKs with short lifetimes.
 
@@ -320,7 +336,7 @@ When TLS-PSK is used in an environment where both client and server are part of 
 
 If a client system is compromised, its complete configuration is exposed to the attacker.  Exposing a client certificate means that the attacker can pretend to be the client.  In contrast, exposing a PSK means that the attacker can not only pretend to be the client, but can also pretend to be the server.
 
-The main benefit of TLS-PSK, therefore, is that its operational processes are similar to that used for managing RADIUS/UDP, while gaining the increased security of TLS.   However, it is still beneficialy for servers to perform IP address filtering, in order to further limit their exposure to attacks.
+The main benefit of TLS-PSK, therefore, is that its operational processes are similar to that used for managing RADIUS/UDP, while gaining the increased security of TLS.   However, it is still beneficially for servers to perform IP address filtering, in order to further limit their exposure to attacks.
 
 ### IP Filtering
 
